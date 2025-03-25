@@ -1,0 +1,82 @@
+.notification-container {
+  position: relative;
+  display: inline-block;
+}
+
+.notification-bell {
+  background-color: #62d2a2;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  width: 300px; /* slightly wider to fit Accept/Reject */
+  max-height: 300px;
+  overflow-y: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 999;
+  padding: 10px;
+}
+
+.no-notifications {
+  text-align: center;
+  color: #666;
+}
+
+.notification-item {
+  border-bottom: 1px solid #eee;
+  padding: 8px 0;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+/* Specifically for friend request notifications */
+.friend-request .sender-name {
+  font-weight: bold;
+}
+
+/* Action buttons container */
+.request-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Accept button */
+.accept-btn {
+  background-color: #4caf50;
+  color: #fff;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.accept-btn:hover {
+  background-color: #45a049;
+}
+
+/* Reject button */
+.reject-btn {
+  background-color: #f44336;
+  color: #fff;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.reject-btn:hover {
+  opacity: 0.8;
+}

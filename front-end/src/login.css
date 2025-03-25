@@ -1,0 +1,87 @@
+/* Global styling */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7; /* Light background */
+}
+
+/* If you still use brand-panel & form-panel for login/register: */
+.auth-container {
+  display: flex;
+  height: 100vh;
+}
+
+.brand-panel {
+  flex: 0.4;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid #ddd;
+}
+
+.brand-panel h1 {
+  font-size: 3rem;
+  color: #333;
+  font-family: 'Helvetica', sans-serif;
+}
+
+.form-panel {
+  flex: 0.6;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.form-panel h2 {
+  margin-bottom: 1rem;
+}
+
+.form-panel form {
+  display: flex;
+  flex-direction: column;
+  max-width: 300px;
+}
+
+.form-panel label {
+  margin-bottom: 0.25rem;
+  font-weight: bold;
+}
+
+.form-panel input {
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.form-panel button {
+  padding: 0.75rem;
+  border: none;
+  background-color: #4caf50;
+  color: #fff;
+  font-size: 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+
+.form-panel button:hover {
+  background-color: #45a049;
+}
+
+.switch-mode {
+  margin-top: 0.5rem;
+}
+
+.switch-mode a {
+  margin-left: 4px;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.switch-mode a:hover {
+  text-decoration: underline;
+}
+

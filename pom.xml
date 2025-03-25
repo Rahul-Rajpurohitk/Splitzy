@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<!-- Define the aggregator project -->
+	<groupId>com.splitzy</groupId>
+	<artifactId>splitzy</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
+
+	<name>splitzy</name>
+	<description>Multi-module project for Splitzy clone</description>
+
+	<!-- List your modules -->
+	<modules>
+		<module>back-end</module>
+		<!-- Optionally, if you want to manage your front-end via Maven:
+             <module>front-end</module> -->
+	</modules>
+
+	<properties>
+		<java.version>17</java.version>
+		<spring-boot.version>3.3.7</spring-boot.version>
+		<lombok.version>1.18.26</lombok.version>
+	</properties>
+
+	<!-- Dependency Management (for consistent versions across modules) -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<!-- Spring Boot Maven Plugin for building executable jars -->
+				<plugin>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-maven-plugin</artifactId>
+					<version>${spring-boot.version}</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+</project>
