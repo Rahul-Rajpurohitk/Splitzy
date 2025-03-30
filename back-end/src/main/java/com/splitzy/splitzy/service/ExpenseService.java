@@ -143,9 +143,32 @@ public class ExpenseService {
                     handleSharesFromParticipants(backendParts, request.getParticipants(), payers, sum);
                     break;
                 case ITEMIZED:
-                    // itemized is often handled by "items," but if you want to re-check raw fields, do it here
-                    // or skip if front-end's itemized logic is enough
-                    logger.info("Skipping itemized re-check, trusting front-end item data");
+                    // NEW: Call the helper function to compute owed amounts (including tax and tip)
+                    Map<String, Double> owedMap = computeOwedItemizedTaxTip(
+                            request.getParticipants(),
+                            request.getItems(),
+                            request.getTaxRate(),
+                            request.getTipRate()
+                    );
+                    // For each participant, create a backend participant entry using the computed value
+                    for (ParticipantDTO pd : request.getParticipants()) {
+                        Participant part = new Participant();
+                        part.setUserId(pd.getUserId());
+                        part.setPartName(pd.getName());
+                        double owed = owedMap.getOrDefault(pd.getUserId(), 0.0);
+                        part.setShare(owed);
+                        // Determine what was paid based on the payer info
+                        double paid = 0;
+                        for (PayerDTO pDto : request.getPayers()) {
+                            if (pDto.getUserId().equals(pd.getUserId())) {
+                                paid = pDto.getPaidAmount();
+                                break;
+                            }
+                        }
+                        part.setPaid(paid);
+                        part.setNet(paid - owed);
+                        backendParts.add(part);
+                    }
                     break;
                 default:
                     // EQUAL or fallback
