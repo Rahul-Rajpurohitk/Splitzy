@@ -307,6 +307,62 @@ public class ExpenseService {
         logger.debug("ExactAmounts split created {} backend participants", backendParts.size());
     }
 
+    private Map<String, Double> computeOwedItemizedTaxTip(
+            List<ParticipantDTO> participants,
+            List<ExpenseItemDTO> items,
+            double taxRate,
+            double tipRate
+    ) {
+        // Step 1: Compute the subtotal and each participant's raw item share.
+        double itemSubtotal = 0.0;
+        Map<String, Double> userItemTotals = new HashMap<>();
+        // Initialize all participants to zero.
+        for (ParticipantDTO p : participants) {
+            userItemTotals.put(p.getUserId(), 0.0);
+        }
+        // Process each item.
+        for (ExpenseItemDTO item : items) {
+            double amount = item.getAmount();
+            itemSubtotal += amount;
+            // Sum all the fractions assigned in this item.
+            double fractionSum = 0.0;
+            for (Double fraction : item.getUserShares().values()) {
+                fractionSum += fraction;
+            }
+            // If someone is assigned (fractionSum > 0), distribute the cost.
+            if (fractionSum > 0) {
+                for (Map.Entry<String, Double> entry : item.getUserShares().entrySet()) {
+                    String uid = entry.getKey();
+                    double fraction = entry.getValue();
+                    // The user's share for this item is the item's amount multiplied by
+                    // their fraction divided by the total fraction sum.
+                    double share = amount * (fraction / fractionSum);
+                    userItemTotals.put(uid, userItemTotals.getOrDefault(uid, 0.0) + share);
+                }
+            }
+        }
+
+        // Step 2: Calculate tax and tip amounts for the overall expense.
+        double taxAmount = itemSubtotal * (taxRate / 100.0);
+        double tipAmount = (itemSubtotal + taxAmount) * (tipRate / 100.0);
+        // Grand total is not used further here but equals itemSubtotal + taxAmount + tipAmount.
+
+        // Step 3: Distribute tax and tip to each participant proportionally.
+        Map<String, Double> finalTotals = new HashMap<>();
+        for (ParticipantDTO p : participants) {
+            String uid = p.getUserId();
+            double userSubtotal = userItemTotals.getOrDefault(uid, 0.0);
+            double fraction = (itemSubtotal > 0) ? userSubtotal / itemSubtotal : 0.0;
+            double userTax = taxAmount * fraction;
+            double userTip = tipAmount * fraction;
+            double totalOwed = userSubtotal + userTax + userTip;
+            finalTotals.put(uid, totalOwed);
+        }
+
+        return finalTotals; // This map contains each participant's total owed amount.
+    }
+
+
 
     private void handleSharesFromParticipants(List<Participant> backendParts,
                                               List<ParticipantDTO> frontEndParts,
