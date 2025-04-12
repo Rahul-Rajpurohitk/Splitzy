@@ -429,6 +429,88 @@ public class ExpenseService {
         logger.debug("Shares split created {} backend participants", backendParts.size());
     }
 
+    // New logic to handle multiple payers in TWO_PERSON mode:
+    private void handleTwoPersonSplitFromParticipants(
+            List<Participant> backendParts,
+            List<ParticipantDTO> frontEndParts,
+            List<Payer> payers,
+            double sum,
+            String creatorId,
+            String fullOwe // e.g., "you" or "other"
+    ) {
+        // Ensure exactly two participants
+        if (frontEndParts.size() != 2) {
+            throw new RuntimeException("Two person split requires exactly two participants");
+        }
+
+        // Identify the two participants
+        ParticipantDTO creatorPart = frontEndParts.stream()
+                .filter(p -> p.getUserId().equals(creatorId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Creator not found in participants"));
+        ParticipantDTO otherPart = frontEndParts.stream()
+                .filter(p -> !p.getUserId().equals(creatorId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Other participant not found"));
+
+        // Aggregate contributions on both sides:
+        double totalPaidByCreator = payers.stream()
+                .filter(p -> p.getUserId().equals(creatorId))
+                .mapToDouble(Payer::getPaidAmount)
+                .sum();
+        double totalPaidByOther = payers.stream()
+                .filter(p -> !p.getUserId().equals(creatorId))
+                .mapToDouble(Payer::getPaidAmount)
+                .sum();
+
+        logger.debug("Aggregated payments - Creator: {}, Other: {}", totalPaidByCreator, totalPaidByOther);
+
+        // Now decide which side is expected to cover the expense based on fullOwe:
+        // Instead of enforcing equality with sum, we simply use the aggregated values.
+        if ("you".equalsIgnoreCase(fullOwe)) {
+            // fullOwe = "you": creator owes full. So the non-creator (other) is credited with what they contributed.
+            Participant payerPart = new Participant();
+            payerPart.setUserId(otherPart.getUserId());
+            payerPart.setPartName(otherPart.getName());
+            payerPart.setPaid(totalPaidByOther);
+            payerPart.setShare(0);
+            payerPart.setNet(totalPaidByOther);
+            backendParts.add(payerPart);
+
+            Participant borrowerPart = new Participant();
+            borrowerPart.setUserId(creatorPart.getUserId());
+            borrowerPart.setPartName(creatorPart.getName());
+            borrowerPart.setPaid(totalPaidByCreator);
+            borrowerPart.setShare(sum); // Expectation: creator should cover sum
+            borrowerPart.setNet(totalPaidByCreator - sum);
+            backendParts.add(borrowerPart);
+        } else if ("other".equalsIgnoreCase(fullOwe)) {
+            // fullOwe = "other": other owes full. So the creator is credited.
+            Participant payerPart = new Participant();
+            payerPart.setUserId(creatorPart.getUserId());
+            payerPart.setPartName(creatorPart.getName());
+            payerPart.setPaid(totalPaidByCreator);
+            payerPart.setShare(0);
+            payerPart.setNet(totalPaidByCreator);
+            backendParts.add(payerPart);
+
+            Participant borrowerPart = new Participant();
+            borrowerPart.setUserId(otherPart.getUserId());
+            borrowerPart.setPartName(otherPart.getName());
+            borrowerPart.setPaid(totalPaidByOther);
+            borrowerPart.setShare(sum);
+            borrowerPart.setNet(totalPaidByOther - sum);
+            backendParts.add(borrowerPart);
+        } else {
+            throw new RuntimeException("Invalid fullOwe value: " + fullOwe);
+        }
+    }
+
+
+
+
+
+
 
     // ---------- compare participants logic ----------
     private boolean compareParticipants(List<Participant> frontEnd, List<Participant> backend) {
