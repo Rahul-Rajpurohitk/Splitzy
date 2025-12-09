@@ -24,6 +24,23 @@ public class ExpenseController {
         return expenseService.getExpensesForUser(userId, filter);
     }
 
+    @GetMapping("/friend")
+    public List<Expense> getExpensesForFriend(
+            @RequestParam String userId,
+            @RequestParam String friendId
+    ) {
+        return expenseService.getExpensesForUser(userId, friendId);
+    }
+
+    @GetMapping("/group")
+    public List<Expense> getExpensesForGroup(
+            @RequestParam String groupId
+    ) {
+        return expenseService.getExpensesForUser(groupId);
+    }
+
+
+
 
     // POST /home/expenses
     @PostMapping

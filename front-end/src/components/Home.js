@@ -9,6 +9,7 @@ import SplitzySocket from './SplitzySocket';
 import socket from '../socket'; // <-- IMPORT the socket directly
 import ExpenseCenter from './expenses/ExpenseCenter';
 import '../home.css';
+import Groups from './Groups';
 
 function Home() {
   const navigate = useNavigate();
@@ -52,36 +53,72 @@ function Home() {
   const username = localStorage.getItem('myUserName');
 
   return (
-    <div className="app-container">
+    <div className="app-shell">
       <SplitzySocket />
 
-      <header className="topbar">
-        <div className="brand">Splitzy</div>
-        <div className="user-info">
-          <Notification />
-          <span>{username}</span>
-          <button onClick={handleLogout} className="logout-btn">
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <div className="main-content">
-        <aside className="sidebar">
-          <Friends />
-        </aside>
-
-        <section className="center-panel">
-          {/* Could show statusMessage if you want */}
-          <ExpenseCenter />
-        </section>
-
-        <aside className="right-panel">
-          <div className="promo-box">
-            <h3>50% off</h3>
-            <p>1 year of Splitzy Pro</p>
+      <div className="app-bg">
+        <header className="topbar">
+          <div className="brand">
+            <div className="brand-mark">S</div>
+            <div className="brand-text">
+              <span className="brand-name">Splitzy</span>
+              <span className="brand-sub">Shared expenses, simplified</span>
+            </div>
           </div>
-        </aside>
+          <div className="top-actions">
+            <Notification />
+            <div className="user-pill">
+              <div className="avatar">{(username || 'U')[0]}</div>
+              <div className="user-meta">
+                <span className="user-name">{username || 'You'}</span>
+                <span className="user-role">Member</span>
+              </div>
+              <button onClick={handleLogout} className="logout-link">
+                Logout
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="main-grid">
+          <aside className="panel sidebar">
+            <Friends />
+            <div className="panel-divider" />
+            <Groups />
+          </aside>
+
+          <section className="panel center-panel">
+            <ExpenseCenter />
+          </section>
+
+          <aside className="panel right-panel">
+            <div className="panel-header">
+              <span>Quick actions</span>
+            </div>
+            <div className="quick-actions">
+              <button className="qa-btn">New expense</button>
+              <button className="qa-btn ghost">Invite a friend</button>
+              <button className="qa-btn ghost">Create group</button>
+            </div>
+            <div className="panel-header spaced">
+              <span>Highlights</span>
+            </div>
+            <div className="insight-card">
+              <div>
+                <p className="insight-label">Open balances</p>
+                <p className="insight-value">$0.00</p>
+              </div>
+              <div className="insight-badge">Clean slate</div>
+            </div>
+            <div className="insight-card">
+              <div>
+                <p className="insight-label">Active groups</p>
+                <p className="insight-value">—</p>
+              </div>
+              <div className="insight-badge ghost">Start one</div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

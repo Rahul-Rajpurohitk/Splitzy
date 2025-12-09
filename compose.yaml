@@ -1,4 +1,4 @@
-version: "3.8"
+#version: "3.8"
 services:
   mongodb:
     image: mongo:latest
@@ -23,7 +23,10 @@ services:
 
 
   app:
-    build: .
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: spring_boot_app
     ports:
       - "8080:8080"

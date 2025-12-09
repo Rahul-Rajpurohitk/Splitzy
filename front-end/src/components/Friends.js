@@ -1,20 +1,16 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSelector } from 'react-redux';
+import { createPortal } from 'react-dom';
+import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
-import '../home.css';
-
+import { setExpenseFilter } from '../features/expense/expenseSlice'; // New action
 
 function Friends() {
-  const [friends, setFriends] = useState([]);  // array of { id, name } objects
+  const dispatch = useDispatch();
+  const [friends, setFriends] = useState([]);  // array of friend objects { id, name, ... }
   const [showAddModal, setShowAddModal] = useState(false);
-
-  // For searching users in "Add Friend" modal
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
-
-  // For "Unfriend" popup
   const [showUnfriendModal, setShowUnfriendModal] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState(null);
 
@@ -23,13 +19,10 @@ function Friends() {
   const userId = localStorage.getItem('myUserId');
 
   // ------------------------------------
-  // 1) Read lastEvent from Redux Fetch friend list on mount
+  // 1) Fetch friend list (on mount)
   // ------------------------------------
-  const lastEvent = useSelector((state) => state.socket.lastEvent);
-
   const fetchFriendList = useCallback(async () => {
     if (!userId || !token) return;
-
     try {
       const response = await axios.get(
         `${process.env.REACT_APP_API_URL}/home/friends?userId=${userId}`,
@@ -45,55 +38,41 @@ function Friends() {
     }
   }, [userId, token]);
 
-  // Fetch friend list on mount
   useEffect(() => {
     fetchFriendList();
   }, [fetchFriendList]);
 
-  // Listen for real-time events from lastEvent
+  // ------------------------------------
+  // 2) Listen for realtime events via Redux (if needed)
+  // ------------------------------------
+  const lastEvent = useSelector((state) => state.socket.lastEvent);
   useEffect(() => {
     if (!lastEvent) return;
-    console.log('[Friends] saw lastEvent:', lastEvent);
+    console.log('[Friends] received event:', lastEvent);
     if(lastEvent.eventType === 'FRIEND_REQUEST') {
-      switch (lastEvent.payload.type) {
-        case 'FRIEND_REQUEST_ACCEPTED':
-        case 'UNFRIEND':
-          console.log('[Friends] re-fetching friend list due to', lastEvent.type);
-          fetchFriendList();
-          break;
-        default:
-          // Possibly ignore or handle other event types
-          break;
+      // Re-fetch list after accepted/unfriended events
+      if (
+        lastEvent.payload.type === 'FRIEND_REQUEST_ACCEPTED' ||
+        lastEvent.payload.type === 'UNFRIEND'
+      ) {
+        fetchFriendList();
       }
     }
   }, [lastEvent, fetchFriendList]);
 
-  // If you only want to show top 4
-  const topFriends = friends.slice(0, 4);
-
-  // -------------------------------------------------
-  // 2) WebSocket callback
-  // -------------------------------------------------
-  // When a real-time event arrives (accept/reject/unfriend),
-  // we re-fetch the friend list to update the UI immediately.
-  
-
   // ------------------------------------
-  // Searching in "Add Friend" modal
+  // 3) Searching in "Add Friend" modal
   // ------------------------------------
   const handleSearchChange = async (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-
     if (value.length >= 3) {
       try {
-        const response = await axios.get(
+        const res = await axios.get(
           `${process.env.REACT_APP_API_URL}/search/user?q=${value}&userId=${userId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        setSearchResults(response.data);
+        setSearchResults(res.data);
         setShowResults(true);
       } catch (error) {
         console.error('Search error:', error);
@@ -105,7 +84,7 @@ function Friends() {
   };
 
   // ------------------------------------
-  // Send friend request
+  // 4) Friend Add and Remove Handlers
   // ------------------------------------
   const handleAddFriend = async (receiverId) => {
     try {
@@ -114,25 +93,33 @@ function Friends() {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert('Friend request sent!');
-      // You might re-fetch or wait for them to accept
-      // fetchFriendList();
     } catch (error) {
       console.error('Error sending friend request:', error);
       alert(error.response?.data || 'Could not send friend request');
     }
   };
 
-  // ------------------------------------
-  // Unfriend logic
-  // ------------------------------------
-  const handleUnfriend = async (friendId) => {
+  // const handleSelectFriend = (user) => {
+  //   if (!user.id) {
+  //     console.warn("Friend object has no 'id' field!", user);
+  //     return;
+  //   }
+  //   // Add friend only if not already in list
+  //   if (!friends.find((f) => f.id === user.id)) {
+  //     setFriends([...friends, user]);
+  //   }
+  //   setSearchTerm('');
+  //   setSearchResults([]);
+  //   setShowResults(false);
+  // };
+
+  const handleRemoveFriend = async (friendId) => {
     try {
       const url = `${process.env.REACT_APP_API_URL}/home/friends/unfriend?userId1=${userId}&userId2=${friendId}`;
       await axios.patch(url, null, {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert('Unfriended successfully!');
-      // Re-fetch to see updated friend list
       fetchFriendList();
     } catch (error) {
       console.error('Error unfriending:', error);
@@ -140,122 +127,125 @@ function Friends() {
     }
   };
 
-  // Show/hide "Add friend" modal
-  const handleAddFriendClick = () => {
-    setShowAddModal(true);
-  };
-  const handleCloseAddModal = () => {
-    setShowAddModal(false);
-    setSearchTerm('');
-    setSearchResults([]);
-    setShowResults(false);
-  };
-
-  // Show/hide "Unfriend" modal
   const handleOpenUnfriendModal = (friend) => {
     setSelectedFriend(friend);
     setShowUnfriendModal(true);
   };
+
   const handleCloseUnfriendModal = () => {
     setShowUnfriendModal(false);
     setSelectedFriend(null);
   };
+
   const handleConfirmUnfriend = () => {
     if (selectedFriend) {
-      // selectedFriend is an object { id, name }
-      handleUnfriend(selectedFriend.id);
+      handleRemoveFriend(selectedFriend.id);
     }
     handleCloseUnfriendModal();
   };
 
-  return (
-    <div className="friends-block">
-      {/* Header with "FRIENDS" and "+ add" on the right */}
-      <div className="friends-header">
-        <h1 className="friends-title">FRIENDS</h1>
-        <button className="add-friend-btn" onClick={handleAddFriendClick}>
-          + add
-        </button>
-      </div>
+  // Show only top 4 friends (for instance)
+  const topFriends = friends.slice(0, 4);
 
-      {/* Render the top 4 friend objects */}
-      <ul className="friends-list">
-        {topFriends.map((friend) => (
-          <li key={friend.id} className="friend-item">
-            <span>{friend.name}</span>
-            <button
-              className="unfriend-btn"
-              onClick={() => handleOpenUnfriendModal(friend)}
-            >
-              x
-            </button>
-          </li>
-        ))}
+    // NEW: Friend click handler to set the expense filter
+  const handleFriendClick = (friend) => {
+    // Dispatch our new expense filter with filterType "contact" (or "friend") and the friend object.
+    dispatch(setExpenseFilter({ filterType: "friend", filterEntity: friend }));
+  };
+
+  return (
+    <div className="panel slim-card">
+      <div className="panel-header">
+        <span>Friends</span>
+        <button className="chip ghost" onClick={() => setShowAddModal(true)}>+ Add</button>
+      </div>
+      <div className="panel-divider" />
+      <ul className="list-stack">
+        {topFriends.length > 0 ? (
+          topFriends.map((friend) => (
+            <li key={friend.id} className="list-tile" onClick={() => handleFriendClick(friend)}>
+              <div className="avatar-mini">{friend.name?.[0] || "F"}</div>
+              <div className="tile-body">
+                <span className="tile-title">{friend.name}</span>
+                <span className="tile-sub">Tap to filter expenses</span>
+              </div>
+              <button
+                className="tile-action"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenUnfriendModal(friend);
+                }}
+              >
+                ×
+              </button>
+            </li>
+          ))
+        ) : (
+          <p className="muted small">No friends yet</p>
+        )}
       </ul>
 
-      {/* ------------------------------------
-          ADD FRIEND MODAL
-      ------------------------------------ */}
-      {showAddModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Invite friends</h3>
-            <input
-              type="text"
-              placeholder="Search by name..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="search-input-modal"
-            />
-            {showResults && searchResults.length > 0 && (
-              <div className="search-results-modal">
-                {searchResults.map((user) => (
-                  <div key={user.id} className="search-item-modal">
-                    <span>{user.name}</span>
-                    <button
-                      onClick={() => handleAddFriend(user.id)}
-                      className="add-friend-modal-btn"
-                    >
-                      Add Friend
+      {showAddModal && createPortal(
+        <div className="modal-overlay glass-backdrop">
+          <div className="glass-card modal-card-sm elevated floating">
+            <div className="modal-header-bar">
+              <h3>Invite friends</h3>
+              <button className="close-btn" onClick={() => setShowAddModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="input modern"
+              />
+              <div className={`dropdown-list soft ${showResults && searchResults.length > 0 ? 'open' : ''}`}>
+                {showResults && searchResults.length > 0 && searchResults.map((user) => (
+                  <div key={user.id} className="dropdown-item">
+                    <div className="avatar-mini">{user.name?.[0] || "U"}</div>
+                    <div className="tile-body">
+                      <span className="tile-title">{user.name}</span>
+                      <span className="tile-sub small">{user.email}</span>
+                    </div>
+                    <button className="chip primary" onClick={() => handleAddFriend(user.id)}>
+                      Add
                     </button>
                   </div>
                 ))}
               </div>
-            )}
-
+            </div>
             <div className="modal-actions">
-              <button className="close-modal-btn" onClick={handleCloseAddModal}>
+              <button
+                className="chip ghost"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSearchTerm('');
+                  setSearchResults([]);
+                  setShowResults(false);
+                }}
+              >
                 Close
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* ------------------------------------
-          UNFRIEND CONFIRMATION MODAL
-      ------------------------------------ */}
       {showUnfriendModal && selectedFriend && (
         <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Unfriend Confirmation</h3>
-            <p>
-              Are you sure you want to unfriend{' '}
-              <strong>{selectedFriend.name}</strong>?
+          <div className="glass-card modal-content-sm">
+            <div className="modal-header">
+              <h3>Unfriend</h3>
+              <button className="close-btn" onClick={handleCloseUnfriendModal}>×</button>
+            </div>
+            <p className="muted small">
+              Remove <strong>{selectedFriend.name}</strong> from your friends?
             </p>
             <div className="modal-actions">
-              <button
-                className="confirm-modal-btn"
-                onClick={handleConfirmUnfriend}
-              >
-                Confirm
-              </button>
-              <button
-                className="close-modal-btn"
-                onClick={handleCloseUnfriendModal}
-              >
-                Cancel
-              </button>
+              <button className="chip ghost" onClick={handleCloseUnfriendModal}>Cancel</button>
+              <button className="chip danger" onClick={handleConfirmUnfriend}>Confirm</button>
             </div>
           </div>
         </div>

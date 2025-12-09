@@ -7,6 +7,9 @@ import {
   fetchExpensesThunk,
   fetchSingleExpenseThunk,
   createExpenseThunk,
+  fetchExpensesForFriendThunk,
+  fetchExpensesForGroupThunk,
+  clearExpenseFilter,
 } from "../../features/expense/expenseSlice";
 
 import ExpenseList from "./ExpenseList";
@@ -19,20 +22,27 @@ function ExpenseCenter() {
   const status = useSelector((state) => state.expense.status);
   const error = useSelector((state) => state.expense.error);
   const selectedExpenseId = useSelector((state) => state.expense.selectedExpenseId);
+  const activeFilter = useSelector((state) => state.expense.activeFilter);
 
   // For demonstration, still from localStorage or from Redux user slice
   const token = localStorage.getItem("splitzyToken");
   const myUserId = localStorage.getItem("myUserId");
 
-  // On mount or if selectedExpenseId changes
   useEffect(() => {
     if (!myUserId) return;
-    if (selectedExpenseId) {
+    if (activeFilter) {
+      if (activeFilter.filterType === "friend") {
+        dispatch(fetchExpensesForFriendThunk({ userId: myUserId, friendId: activeFilter.filterEntity.id, token }));
+      } else if (activeFilter.filterType === "group") {
+        dispatch(fetchExpensesForGroupThunk({ groupId: activeFilter.filterEntity.id, token }));
+      }
+    } else if (selectedExpenseId) {
       dispatch(fetchSingleExpenseThunk({ expenseId: selectedExpenseId, userId: myUserId, token }));
     } else {
       dispatch(fetchExpensesThunk({ userId: myUserId, token }));
     }
-  }, [selectedExpenseId, myUserId, token, dispatch]);
+  }, [selectedExpenseId, myUserId, token, dispatch, activeFilter]);
+
 
   // If you have socket events
   const lastEvent = useSelector((state) => state.socket.lastEvent);
@@ -50,24 +60,19 @@ function ExpenseCenter() {
       description: expenseData.description,
       date: expenseData.date || new Date().toISOString().slice(0, 10),
       notes: expenseData.notes || "",
+      groupId: expenseData.group ? expenseData.group.id : null,
+      groupName: expenseData.group ? expenseData.group.groupName : "",  
       splitMethod: expenseData.splitMethod,
       totalAmount: expenseData.amount || 0,
       //participantIds: expenseData.participants.map((p) => p.userId),
-      payers: [],
+      payers: expenseData.payerInfo.payers,
       participants: expenseData.participants, // the single array
       items: [],
+      taxRate: expenseData.taxRate,   // now included
+      tipRate: expenseData.tipRate,
+      fullOwe: expenseData.fullOwe, // now included
     };
 
-    if (expenseData.payerInfo.mode === "multiple") {
-      payload.payers = expenseData.payerInfo.payers.map((py) => ({
-        userId: py.userId,
-        payerName: py.name,
-        paidAmount: py.paidAmount,
-      }));
-    } else {
-      // single payer => either "you" or a friend
-      payload.payers = [{ userId: myUserId, paidAmount: payload.totalAmount }];
-    }
 
       // If itemized
     if (expenseData.splitMethod === "ITEMIZED") {
@@ -85,6 +90,9 @@ function ExpenseCenter() {
       payload.sharesMap = expenseData.sharesMap; // { userId -> shareCount }
     } */
 
+    // Log the final payload for debugging purposes.
+    console.log("Final payload:", payload);
+
     try {
       await dispatch(createExpenseThunk({ payload, token })).unwrap();
       setShowModal(false);
@@ -95,34 +103,51 @@ function ExpenseCenter() {
     }
   };
 
-  const handleShowAllExpenses = () => {
+  const handleClearFilter = () => {
     dispatch(clearSelectedExpenseId());
+    dispatch(clearExpenseFilter());
   };
+
+  // Determine title based on activeFilter
+  let headerTitle = "Expenses";
+  if (activeFilter) {
+    if (activeFilter.filterType === "friend") {
+      headerTitle = `${activeFilter.filterEntity.name}'s Expenses`;
+    } else if (activeFilter.filterType === "group") {
+      headerTitle = `${activeFilter.filterEntity.groupName} Expenses`;
+    }
+  }
 
   return (
     <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-700">Expenses</h2>
-        <div className="space-x-2">
-          <button
-            className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
-            onClick={() => setShowModal(true)}
-          >
-            + Add Expense
-          </button>
-          {selectedExpenseId && (
-            <button
-              className="bg-gray-200 px-3 py-2 rounded hover:bg-gray-300"
-              onClick={handleShowAllExpenses}
-            >
-              View All Expenses
+      <div className="expense-header">
+        <div className="expense-head-left">
+          <div className="expense-title-row">
+            <h2 className="expense-title">{headerTitle}</h2>
+            {activeFilter && (
+              <span className="pill filter-pill">
+                {activeFilter.filterType === "friend"
+                  ? `Friend: ${activeFilter.filterEntity.name}`
+                  : `Group: ${activeFilter.filterEntity.groupName}`}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="header-actions">
+          {(selectedExpenseId || activeFilter) && (
+            <button className="chip ghost" onClick={handleClearFilter}>
+              Reset view
             </button>
           )}
+          <button className="chip primary" onClick={() => setShowModal(true)}>
+            + Add expense
+          </button>
         </div>
       </div>
+      <div className="panel-divider soft" />
 
-      {status === "loading" && <p>Loading expenses...</p>}
-      {status === "failed" && <p className="text-red-500">Error: {error}</p>}
+      {status === "loading" && <p className="muted">Loading expenses...</p>}
+      {status === "failed" && <p className="error-text">Error: {error}</p>}
 
       {/* We pass myUserId so children can do "You owe / You lent" logic if needed */}
       {/* The child will do its own useSelector to get the expense list */}

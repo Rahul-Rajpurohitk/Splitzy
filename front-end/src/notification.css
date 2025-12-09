@@ -80,3 +80,16 @@
 .reject-btn:hover {
   opacity: 0.8;
 }
+
+
+.expense-notification {
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+}
+
+.expense-notification .notification-message {
+  font-weight: normal;
+  color: #333;
+}

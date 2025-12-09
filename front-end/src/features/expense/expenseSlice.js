@@ -57,12 +57,52 @@ export const createExpenseThunk = createAsyncThunk(
   }
 );
 
+// 4) New Async Thunk: Fetch expenses filtered by friend
+export const fetchExpensesForFriendThunk = createAsyncThunk(
+  "expense/fetchForFriend",
+  async ({ userId, friendId, token }, thunkAPI) => {
+    try {
+      const res = await axios.get(
+        `${process.env.REACT_APP_API_URL}/home/expenses/friend`,
+        {
+          params: { userId, friendId },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// 5) New Async Thunk: Fetch expenses filtered by group
+export const fetchExpensesForGroupThunk = createAsyncThunk(
+  "expense/fetchForGroup",
+  async ({ groupId, token }, thunkAPI) => {
+    try {
+      const res = await axios.get(
+        `${process.env.REACT_APP_API_URL}/home/expenses/group`,
+        {
+          params: { groupId },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+
 // 4) Initial state
 const initialState = {
   list: [],             // all fetched expenses
   selectedExpenseId: null,
   status: "idle",       // "idle" | "loading" | "succeeded" | "failed"
   error: null,
+  activeFilter: null,  // null or { filterType: "friend" or "group", filterEntity: { ... } }
 };
 
 // 5) Create the slice
@@ -75,6 +115,14 @@ const expenseSlice = createSlice({
     },
     clearSelectedExpenseId(state) {
       state.selectedExpenseId = null;
+    },
+    // New reducers for expense filtering
+    setExpenseFilter(state, action) {
+      // action.payload: { filterType, filterEntity }
+      state.activeFilter = action.payload;
+    },
+    clearExpenseFilter(state) {
+      state.activeFilter = null;
     },
   },
   extraReducers: (builder) => {
@@ -122,12 +170,45 @@ const expenseSlice = createSlice({
       .addCase(createExpenseThunk.rejected, (state, action) => {
         state.error = action.payload || "Failed to create expense";
       });
+
+      // Handle new friend filtering thunk
+    builder
+      .addCase(fetchExpensesForFriendThunk.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(fetchExpensesForFriendThunk.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.list = action.payload;
+      })
+      .addCase(fetchExpensesForFriendThunk.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload || "Failed to fetch friend expenses";
+      });
+    // Handle new group filtering thunk
+    builder
+      .addCase(fetchExpensesForGroupThunk.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(fetchExpensesForGroupThunk.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.list = action.payload;
+      })
+      .addCase(fetchExpensesForGroupThunk.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload || "Failed to fetch group expenses";
+      });
+
+
   },
 });
 
 export const {
   setSelectedExpenseId,
   clearSelectedExpenseId,
+  setExpenseFilter,
+  clearExpenseFilter,
 } = expenseSlice.actions;
 
 

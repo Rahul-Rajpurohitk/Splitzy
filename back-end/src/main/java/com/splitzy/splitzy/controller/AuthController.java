@@ -10,6 +10,7 @@ import com.splitzy.splitzy.util.JwtUtil;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+    private static final Pattern STRONG_PASSWORD = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).{8,}$");
 
     @Autowired
     private AuthenticationManager authenticationManager;
@@ -111,8 +113,11 @@ public class AuthController {
                 logger.info("Email {} is available for registration", user.getEmail());
             }
 
-            // Log the raw password during signup
-            logger.info("Raw password during signup: {}", user.getPassword());
+            // Validate password strength
+            if (user.getPassword() == null || !STRONG_PASSWORD.matcher(user.getPassword()).matches()) {
+                logger.warn("Signup failed: weak password for email {}", user.getEmail());
+                return "Error: Password must be at least 8 characters and include upper, lower, number, and symbol.";
+            }
 
             // Generate a verification token
             String verificationToken = java.util.UUID.randomUUID().toString();
@@ -186,6 +191,19 @@ public class AuthController {
         }
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", user.getId());
+        response.put("name", user.getName());
+        response.put("email", user.getEmail());
+        response.put("friendIds", user.getFriendIds());
+
+        return ResponseEntity.ok(response);
+    }
 
 }

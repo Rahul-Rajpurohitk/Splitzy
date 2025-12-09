@@ -25,4 +25,10 @@ public class NotificationController {
     public void markAsRead(@PathVariable String friendRequestId) {
         notificationService.markAsReadByFriendRequestId(friendRequestId);
     }
+
+    @PatchMapping("/{notificationId}/read")
+    public void markNotificationRead(@PathVariable String notificationId) {
+        notificationService.markNotificationRead(notificationId);
+    }
+
 }

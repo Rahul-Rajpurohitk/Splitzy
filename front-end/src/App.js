@@ -2,10 +2,12 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
+import OAuth2RedirectHandler from './components/auth/OAuth2RedirectHandler';
 import './login.css';
 import './home.css';
 import Home from './components/Home';
 import './output.css'
+
 
 
 function App() {
@@ -18,6 +20,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         {/* Register page */}
         <Route path="/register" element={<Register />} />
+        <Route path="/oauth2/redirect" element={<OAuth2RedirectHandler />} />
         {/* Protected Home */}
         <Route path="/home" element={<Home />} />
       </Routes>

@@ -39,12 +39,24 @@ function SplitzySocket() {
       }));
     });
 
+    //Group Invite event listener ***
+    socket.on("groupInvite", (data) => {
+      console.log("Socket.IO groupInvite event received:", data);
+      dispatch(setLastEvent({
+        eventType: "GROUP_INVITE",
+        payload: data
+      }));
+    });
+
+
+
     // Cleanup: remove event listeners on unmount
     return () => {
       socket.off("connect");
       socket.off("disconnect");
       socket.off("friendRequest");
       socket.off("expenseEvent");
+      socket.off("groupInvite");
     };
   }, [dispatch]);
 

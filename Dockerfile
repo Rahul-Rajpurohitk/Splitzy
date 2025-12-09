@@ -15,7 +15,8 @@ COPY back-end/src ./back-end/src
 RUN mvn clean install -DskipTests
 
 # Use a smaller runtime image for the final build
-FROM eclipse-temurin:17-jdk-alpine
+FROM eclipse-temurin:17-jdk
+
 
 # Set the working directory inside the container
 WORKDIR /app

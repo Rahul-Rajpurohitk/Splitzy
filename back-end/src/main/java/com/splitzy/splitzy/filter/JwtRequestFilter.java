@@ -29,14 +29,6 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain chain)
             throws IOException, jakarta.servlet.ServletException, java.io.IOException {
 
-        // 1. Check if request is for an "/auth/**" endpoint
-        String requestURI = request.getRequestURI();
-        if (requestURI.startsWith("/auth/")) {
-            // Skip the JWT checks for /auth/** endpoints. Proceed directly to the next filter
-            chain.doFilter(request, response);
-            return;
-        }
-        // 2. Otherwise, continue with normal JWT check
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

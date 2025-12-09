@@ -11,6 +11,10 @@ public class CreateExpenseRequest {
     private double totalAmount; // optional if you want the sum of payers to match
     private LocalDate date;
     private String notes;
+    // Add these two lines to your CreateExpenseRequest.java (e.g., after tipRate)
+    private String groupId;
+    private String groupName;
+
 
     // multiple payers scenario
     private List<PayerDTO> payers;
@@ -25,6 +29,12 @@ public class CreateExpenseRequest {
 
     // For itemized mode
     private List<ExpenseItemDTO> items;
+
+    private double taxRate;
+    private double tipRate;
+
+    private String fullOwe;
+
 
     /*
     // For PERCENTAGE mode: userId -> percentage (e.g. 35.0 for 35%)

@@ -31,5 +31,6 @@ public class User {
     private boolean verified; // To check if the user is verified
 
     private Set<String> friendIds = new HashSet<>();
+    private Set<String> groupIds = new HashSet<>();
 
 }

@@ -58,18 +58,23 @@ public class ExpenseService {
         Expense expense = new Expense();
         expense.setDescription(request.getDescription());
         expense.setNotes(request.getNotes());
+        expense.setGroupId(request.getGroupId());
+        expense.setGroupName(request.getGroupName());
         expense.setDate(request.getDate());
         expense.setCreatorId(request.getCreatorId());
         expense.setCreatorName(creator.getName());
         expense.setCreatedAt(LocalDateTime.now());
         expense.setUpdatedAt(LocalDateTime.now());
 
+
         SplitMethod splitMethod = SplitMethod.valueOf(request.getSplitMethod().toUpperCase());
         expense.setSplitMethod(splitMethod);
+        expense.setTaxRate(request.getTaxRate());
+        expense.setTipRate(request.getTipRate());
         logger.debug("Split method set to: {}", splitMethod);
 
 
-        // 2) If itemized
+        // 2) Process items
         double sum;
         if (splitMethod == SplitMethod.ITEMIZED && request.getItems() != null) {
             logger.info("Handling itemized logic for expense");
@@ -170,8 +175,11 @@ public class ExpenseService {
                         backendParts.add(part);
                     }
                     break;
+                case TWO_PERSON:
+                    // NEW: Handle two person split.
+                    handleTwoPersonSplitFromParticipants(backendParts, request.getParticipants(), payers, sum, request.getCreatorId(), request.getFullOwe());
+                    break;
                 default:
-                    // EQUAL or fallback
                     logger.warn("Unknown splitMethod, defaulting to EQUAL split");
                     handleEqualSplitFromParticipants(backendParts, request.getParticipants(), payers, sum);
                     break;
@@ -604,16 +612,41 @@ public class ExpenseService {
         };
     }
 
+    /**
+     * Retrieves expenses where both the logged-in user and the friend are involved.
+     *
+     * @param userId   Logged-in user's id.
+     * @param friendId Friend's id.
+     */
+    public List<Expense> getExpensesForFriend(String userId, String friendId) {
+        logger.debug("Fetching expenses for userId={} and friendId={}", userId, friendId);
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        return expenseRepository.findAllByBothUserInvolvement(userId, friendId, sort);
+    }
 
-    private void sendExpenseNotification(Expense expense, String creatorName, String creatorId) {
+    /**
+     * Retrieves expenses associated with a specific group.
+     *
+     * @param groupId Group id.
+     */
+    public List<Expense> getExpensesForGroup(String groupId) {
+        logger.debug("Fetching expenses for groupId={}", groupId);
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        return expenseRepository.findAllByGroupId(groupId, sort);
+    }
+
+
+
+
+    private void sendExpenseNotification(Expense expense, String creatorId, String creatorName) {
         logger.debug("Sending expense notification for expenseId={}, creatorId={}", expense.getId(), creatorId);
         // Suppose you want to notify each participant
         for (Participant p : expense.getParticipants()) {
             notificationService.createNotification(
                     p.getUserId(),
                     "You have a new expense: " + expense.getDescription(),
-                    expense.getId(),
-                    creatorName,// referenceId
+                    expense.getId(), //reference to expense ID
+                    creatorName,
                     creatorId,                      // or whoever created the expense
                     "EXPENSE"                      // type
             );
