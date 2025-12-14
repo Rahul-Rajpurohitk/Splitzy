@@ -1,5 +1,6 @@
 package com.splitzy.splitzy.repository;
 
+import org.springframework.context.annotation.Profile;
 import com.splitzy.splitzy.model.Expense;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
+@Profile("!postgres")
 public interface ExpenseRepository extends MongoRepository<Expense, String> {
 
 

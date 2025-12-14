@@ -15,6 +15,7 @@ public class Expense {
     private String id;
 
     private String description;
+    private String category;              // expense category (e.g., "food", "transport", "entertainment")
     private double totalAmount;           // sum of all payers' amounts
     private LocalDate date;
     private String notes;

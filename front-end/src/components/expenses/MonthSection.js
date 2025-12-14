@@ -1,13 +1,17 @@
 import React from "react";
 import ExpenseCard from "./ExpenseCard";
 
-function MonthSection({ monthKey, expenses, expandedExpenseId, onToggleExpand, myUserId }) {
+function MonthSection({ monthKey, expenses, expandedExpenseId, onToggleExpand, myUserId, onOpenChat }) {
+  // Calculate month summary
+  const monthTotal = expenses.reduce((sum, exp) => sum + (exp.totalAmount || 0), 0);
+  
   return (
-    <div className="mb-3"> {/* Reduced from mb-6 to mb-3 */}
-      <div className="bg-gray-100 px-3 py-1 text-gray-700 font-semibold uppercase rounded mb-2 text-xs tracking-wider">
-        {monthKey}
+    <div className="month-section">
+      <div className="month-header">
+        <span className="month-label">{monthKey}</span>
+        <span className="month-total">${monthTotal.toFixed(2)} total</span>
       </div>
-      <div className="space-y-2"> {/* Reduced spacing between cards slightly */}
+      <div className="expenses-stack">
         {expenses.map((exp) => (
           <ExpenseCard
             key={exp.id}
@@ -15,6 +19,7 @@ function MonthSection({ monthKey, expenses, expandedExpenseId, onToggleExpand, m
             isExpanded={expandedExpenseId === exp.id}
             onToggleExpand={() => onToggleExpand(exp.id)}
             myUserId={myUserId}
+            onOpenChat={onOpenChat}
           />
         ))}
       </div>

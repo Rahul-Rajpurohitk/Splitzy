@@ -22,6 +22,33 @@ services:
       - splitzy_network
 
 
+  postgres:
+    image: postgres:15
+    container_name: postgres_container
+    environment:
+      POSTGRES_USER: splitzy
+      POSTGRES_PASSWORD: splitzy
+      POSTGRES_DB: splitzy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - splitzy_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin_container
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@splitzy.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - splitzy_network
+
   app:
     platform: linux/amd64
     build:
@@ -32,7 +59,16 @@ services:
       - "8080:8080"
       - "9092:9092"   # Expose the Socket.IO server port
     environment:
-      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/splitzyDB
+      # Force Postgres profile by default
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-postgres}
+      # PostgreSQL
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/splitzy
+      POSTGRES_USER: splitzy
+      POSTGRES_PASSWORD: splitzy
+      # Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      # Mail settings
       SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
       SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
       SPRING_MAIL_HOST: ${SPRING_MAIL_HOST}
@@ -40,13 +76,14 @@ services:
       SPRING_MAIL_PROTOCOL: ${SPRING_MAIL_PROTOCOL}
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PORT: 6379
+      # Google OAuth2 (must be explicitly passed for Spring to read)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
     env_file:
       - .env
     depends_on:
-      - mongodb
       - redis
+      - postgres
     networks:
       - splitzy_network
 
@@ -56,4 +93,6 @@ networks:
 
 volumes:
   mongodb_data:
+    driver: local
+  postgres_data:
     driver: local

@@ -1,7 +1,10 @@
 package com.splitzy.splitzy.controller;
 
 import com.splitzy.splitzy.model.User;
-import com.splitzy.splitzy.repository.UserRepository;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,13 +15,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/search")
 public class SearchController {
 
+    private static final Logger logger = LoggerFactory.getLogger(SearchController.class);
+
     @Autowired
-    private final UserRepository userRepository;
-
-    public SearchController(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
+    private UserDao userDao;
 
     @GetMapping("/user")
     public List<User> searchUsers(@RequestParam("q") String query,
@@ -31,18 +31,26 @@ public class SearchController {
         // Build a case-insensitive regex: (?i) means ignore case
         String regex = "(?i).*" + query + ".*";
 
-        // Query the DB by name or email
-        List<User> byName = userRepository.findByNameRegex(regex);
-        List<User> byEmail = userRepository.findByEmailRegex(regex);
+        // Query the DB by name or email via DAO
+        List<UserDto> byName = userDao.findByNameRegex(regex);
+        List<UserDto> byEmail = userDao.findByEmailRegex(regex);
 
-        // Combine results, removing duplicates
-        Set<User> resultSet = new HashSet<>(byName);
-        resultSet.addAll(byEmail);
+        // Combine results, removing duplicates by id
+        Map<String, UserDto> resultMap = new LinkedHashMap<>();
+        for (UserDto u : byName) {
+            resultMap.put(u.getId(), u);
+        }
+        for (UserDto u : byEmail) {
+            resultMap.put(u.getId(), u);
+        }
 
         // **Always exclude the user themself** from results
-        resultSet.removeIf(u -> u.getId().equals(currentUserId));
+        resultMap.remove(currentUserId);
 
-        return new ArrayList<>(resultSet);
+        // Convert DTOs to User models
+        return resultMap.values().stream()
+                .map(this::toUser)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -52,38 +60,46 @@ public class SearchController {
     @GetMapping("/friends")
     public List<User> searchFriends(@RequestParam("q") String query,
                                     @RequestParam("userId") String currentUserId) {
+        logger.info("[SearchController] searchFriends called with query='{}', userId='{}'", query, currentUserId);
+        
         if (query.length() < 3) {
+            logger.info("[SearchController] Query too short, returning empty list");
             return List.of();
         }
 
-        User currentUser = userRepository.findById(currentUserId)
+        UserDto currentUser = userDao.findById(currentUserId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + currentUserId));
         Set<String> friendIds = currentUser.getFriendIds();
-        if (friendIds.isEmpty()) {
+        logger.info("[SearchController] User {} has {} friends: {}", currentUserId, friendIds.size(), friendIds);
+        
+        if (friendIds == null || friendIds.isEmpty()) {
+            logger.info("[SearchController] No friends found, returning empty list");
             return List.of();
         }
 
         // Build the same case-insensitive pattern
-        String regex = ".*" + query + ".*"; // We'll set $options:'i' in the query itself
+        String regex = ".*" + query + ".*";
+        logger.info("[SearchController] Searching with regex: {}", regex);
 
-        // Now a single query that matches:
-        //   `_id in friendIds`
-        //   AND (`name` or `email` matches the regex)
-        return userRepository.findFriendsByRegex(friendIds, regex);
+        List<UserDto> results = userDao.findFriendsByRegex(friendIds, regex);
+        logger.info("[SearchController] Found {} matching friends", results.size());
+
+        return results.stream()
+                .map(this::toUser)
+                .collect(Collectors.toList());
     }
 
-
-/*    @GetMapping("/groups/{groupId}")
-    public List<User> searchGroupMembers(@PathVariable String groupId,
-                                         @RequestParam("q") String query,
-                                         @RequestParam("userId") String currentUserId) {
-        // 1) Check user is in group or has permission
-        // 2) Get all user IDs in that group
-        // 3) Filter by name/email
-        // 4) Exclude the current user if you want
-        return ...
-    }*/
-
-
-
+    // --- Conversion helper ---
+    private User toUser(UserDto dto) {
+        User user = new User();
+        user.setId(dto.getId());
+        user.setName(dto.getName());
+        user.setEmail(dto.getEmail());
+        user.setPassword(dto.getPassword());
+        user.setVerificationToken(dto.getVerificationToken());
+        user.setVerified(dto.isVerified());
+        user.setFriendIds(dto.getFriendIds() != null ? dto.getFriendIds() : new HashSet<>());
+        user.setGroupIds(dto.getGroupIds() != null ? dto.getGroupIds() : new HashSet<>());
+        return user;
+    }
 }

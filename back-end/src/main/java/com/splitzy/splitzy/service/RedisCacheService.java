@@ -89,5 +89,104 @@ public class RedisCacheService {
             throw e;
         }
     }
+
+    // ===========================================
+    // ANALYTICS CACHING METHODS
+    // ===========================================
+
+    private static final String ANALYTICS_PREFIX = "analytics:";
+    private static final long ANALYTICS_DEFAULT_TTL = 300; // 5 minutes
+
+    /**
+     * Cache analytics result.
+     */
+    public void cacheAnalytics(String userId, String analyticsType, Object data) {
+        cacheAnalytics(userId, analyticsType, null, data, ANALYTICS_DEFAULT_TTL);
+    }
+
+    /**
+     * Cache analytics result with custom TTL.
+     */
+    public void cacheAnalytics(String userId, String analyticsType, String filterKey, Object data, long ttlSeconds) {
+        String key = buildAnalyticsKey(userId, analyticsType, filterKey);
+        try {
+            redisCacheTemplate.opsForValue().set(key, data, ttlSeconds, TimeUnit.SECONDS);
+            logger.debug("Cached analytics data. Key: {}", key);
+        } catch (Exception e) {
+            logger.warn("Failed to cache analytics. Key: {}, Error: {}", key, e.getMessage());
+            // Don't throw - caching failure shouldn't break the request
+        }
+    }
+
+    /**
+     * Get cached analytics result.
+     */
+    public Object getCachedAnalytics(String userId, String analyticsType, String filterKey) {
+        String key = buildAnalyticsKey(userId, analyticsType, filterKey);
+        try {
+            Object cached = redisCacheTemplate.opsForValue().get(key);
+            if (cached != null) {
+                logger.debug("Cache hit for analytics. Key: {}", key);
+            }
+            return cached;
+        } catch (Exception e) {
+            logger.warn("Failed to get cached analytics. Key: {}, Error: {}", key, e.getMessage());
+            return null; // Return null on error, let caller compute fresh data
+        }
+    }
+
+    /**
+     * Invalidate analytics cache for a user.
+     */
+    public void invalidateAnalyticsCache(String userId) {
+        String pattern = ANALYTICS_PREFIX + userId + ":*";
+        try {
+            Set<String> keys = redisCacheTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisCacheTemplate.delete(keys);
+                logger.info("Invalidated {} analytics cache entries for user {}", keys.size(), userId);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to invalidate analytics cache for user {}: {}", userId, e.getMessage());
+        }
+    }
+
+    /**
+     * Invalidate specific analytics type cache for a user.
+     */
+    public void invalidateAnalyticsCache(String userId, String analyticsType) {
+        String pattern = ANALYTICS_PREFIX + userId + ":" + analyticsType + ":*";
+        try {
+            Set<String> keys = redisCacheTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisCacheTemplate.delete(keys);
+                logger.info("Invalidated {} analytics cache entries for user {} type {}", keys.size(), userId, analyticsType);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to invalidate analytics cache for user {} type {}: {}", userId, analyticsType, e.getMessage());
+        }
+    }
+
+    /**
+     * Build a cache key for analytics.
+     */
+    private String buildAnalyticsKey(String userId, String analyticsType, String filterKey) {
+        if (filterKey != null && !filterKey.isEmpty()) {
+            return ANALYTICS_PREFIX + userId + ":" + analyticsType + ":" + filterKey;
+        }
+        return ANALYTICS_PREFIX + userId + ":" + analyticsType;
+    }
+
+    /**
+     * Check if analytics cache exists.
+     */
+    public boolean hasAnalyticsCache(String userId, String analyticsType, String filterKey) {
+        String key = buildAnalyticsKey(userId, analyticsType, filterKey);
+        try {
+            return Boolean.TRUE.equals(redisCacheTemplate.hasKey(key));
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
 

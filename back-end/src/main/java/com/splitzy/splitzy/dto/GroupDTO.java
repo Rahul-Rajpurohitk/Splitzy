@@ -10,13 +10,10 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GroupDTO {
+    private String id;
     private String groupName;
     private String creatorId;
     private String creatorName;
     private List<GroupMemberDTO> friends;
     private String groupType;
-
-    public void setId(String id) {
-        
-    }
 }

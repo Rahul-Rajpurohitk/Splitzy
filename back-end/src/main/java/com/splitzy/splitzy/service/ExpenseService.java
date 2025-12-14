@@ -3,8 +3,10 @@ package com.splitzy.splitzy.service;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.splitzy.splitzy.dto.*;
 import com.splitzy.splitzy.model.*;
-import com.splitzy.splitzy.repository.ExpenseRepository;
-import com.splitzy.splitzy.repository.UserRepository;
+import com.splitzy.splitzy.service.dao.ExpenseDao;
+import com.splitzy.splitzy.service.dao.ExpenseDto;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.splitzy.splitzy.model.SplitMethod.*;
 
@@ -25,70 +28,68 @@ public class ExpenseService {
     private static final Logger logger = LoggerFactory.getLogger(ExpenseService.class);
 
     @Autowired
-    private ExpenseRepository expenseRepository;
+    private ExpenseDao expenseDao;
 
     @Autowired
-    private NotificationService notificationService;  // <--- For sending notifications
+    private NotificationService notificationService;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
     private SocketIOServer socketIOServer;
 
-
-
     public List<Expense> getExpensesForUser(String userId) {
-        // Example: find all expenses where user is a participant or a payer
-        // This is just a placeholder; you'd write a custom query or filter logic
         logger.debug("Fetching expenses for userId={}", userId);
-        return expenseRepository.findAll(); // or a real query
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        return expenseDao.findAllByUserInvolvement(userId, sort).stream()
+                .map(this::toExpense)
+                .collect(Collectors.toList());
     }
 
     public Expense createExpense(CreateExpenseRequest request) {
 
         logger.info("createExpense() called with request: {}", request);
         // 1) Basic checks
-        User creator = userRepository.findById(request.getCreatorId())
+        UserDto creator = userDao.findById(request.getCreatorId())
                 .orElseThrow(() -> {
                     logger.error("Creator not found for id={}", request.getCreatorId());
                     return new RuntimeException("Creator not found: " + request.getCreatorId());
                 });
 
-        Expense expense = new Expense();
-        expense.setDescription(request.getDescription());
-        expense.setNotes(request.getNotes());
-        expense.setGroupId(request.getGroupId());
-        expense.setGroupName(request.getGroupName());
-        expense.setDate(request.getDate());
-        expense.setCreatorId(request.getCreatorId());
-        expense.setCreatorName(creator.getName());
-        expense.setCreatedAt(LocalDateTime.now());
-        expense.setUpdatedAt(LocalDateTime.now());
-
+        ExpenseDto expenseDto = new ExpenseDto();
+        expenseDto.setDescription(request.getDescription());
+        expenseDto.setCategory(request.getCategory());
+        expenseDto.setNotes(request.getNotes());
+        expenseDto.setGroupId(request.getGroupId());
+        expenseDto.setGroupName(request.getGroupName());
+        expenseDto.setDate(request.getDate());
+        expenseDto.setCreatorId(request.getCreatorId());
+        expenseDto.setCreatorName(creator.getName());
+        expenseDto.setCreatedAt(LocalDateTime.now());
+        expenseDto.setUpdatedAt(LocalDateTime.now());
 
         SplitMethod splitMethod = SplitMethod.valueOf(request.getSplitMethod().toUpperCase());
-        expense.setSplitMethod(splitMethod);
-        expense.setTaxRate(request.getTaxRate());
-        expense.setTipRate(request.getTipRate());
+        expenseDto.setSplitMethod(splitMethod);
+        expenseDto.setTaxRate(request.getTaxRate());
+        expenseDto.setTipRate(request.getTipRate());
         logger.debug("Split method set to: {}", splitMethod);
-
 
         // 2) Process items
         double sum;
         if (splitMethod == SplitMethod.ITEMIZED && request.getItems() != null) {
             logger.info("Handling itemized logic for expense");
             double tmpSum = 0;
-            List<ExpenseItem> itemList = new ArrayList<>();
+            List<ExpenseDto.ExpenseItemDto> itemList = new ArrayList<>();
             for (ExpenseItemDTO iDto : request.getItems()) {
-                ExpenseItem item = new ExpenseItem();
+                ExpenseDto.ExpenseItemDto item = new ExpenseDto.ExpenseItemDto();
                 item.setName(iDto.getName());
                 item.setAmount(iDto.getAmount());
                 item.setUserShares(iDto.getUserShares());
                 itemList.add(item);
                 tmpSum += iDto.getAmount();
             }
-            expense.setItems(itemList);
+            expenseDto.setItems(itemList);
             sum = tmpSum;
             logger.debug("Itemized total sum: {}", sum);
         } else {
@@ -97,28 +98,27 @@ public class ExpenseService {
         }
 
         // 3) Convert payers
-        List<Payer> payers = new ArrayList<>();
+        List<ExpenseDto.PayerDto> payers = new ArrayList<>();
         double payersSum = 0;
         for (PayerDTO pDto : request.getPayers()) {
-            Payer payer = new Payer();
+            ExpenseDto.PayerDto payer = new ExpenseDto.PayerDto();
             payer.setUserId(pDto.getUserId());
             // Always fetch name from DB:
-            User user = userRepository.findById(pDto.getUserId())
+            UserDto user = userDao.findById(pDto.getUserId())
                     .orElseThrow(() -> new RuntimeException("Payer user not found: " + pDto.getUserId()));
             payer.setPayerName(user.getName());
             payer.setPaidAmount(pDto.getPaidAmount());
             payers.add(payer);
             payersSum += pDto.getPaidAmount();
         }
-        expense.setPayers(payers);
+        expenseDto.setPayers(payers);
         logger.debug("Payers: {}, sum of payers' amounts: {}", payers, payersSum);
-        // optional: check if payersSum == sum
 
         // 4) Build "frontEndParts" from request.getParticipants()
-        List<Participant> frontEndParts = new ArrayList<>();
+        List<ExpenseDto.ParticipantDto> frontEndParts = new ArrayList<>();
         if (request.getParticipants() != null) {
             for (ParticipantDTO pd : request.getParticipants()) {
-                Participant part = new Participant();
+                ExpenseDto.ParticipantDto part = new ExpenseDto.ParticipantDto();
                 part.setUserId(pd.getUserId());
                 part.setPartName(pd.getName());
                 part.setPaid(pd.getPaid());
@@ -130,39 +130,44 @@ public class ExpenseService {
         logger.debug("Front-end participants count: {}", frontEndParts.size());
 
         // 5) Re-run the logic => "backendParts"
-        List<Participant> backendParts = new ArrayList<>();
+        List<ExpenseDto.ParticipantDto> backendParts = new ArrayList<>();
         if (request.getParticipants() != null) {
             logger.info("Recomputing backendParts from participants for splitMethod={}", splitMethod);
-            switch (splitMethod) {
+            // Convert payers to Payer model for processing
+            List<Payer> payersModel = payers.stream().map(p -> {
+                Payer pm = new Payer();
+                pm.setUserId(p.getUserId());
+                pm.setPayerName(p.getPayerName());
+                pm.setPaidAmount(p.getPaidAmount());
+                return pm;
+            }).collect(Collectors.toList());
 
+            switch (splitMethod) {
                 case EQUALLY:
-                    handleEqualSplitFromParticipants(backendParts, request.getParticipants(), payers, sum);
+                    handleEqualSplitFromParticipants(backendParts, request.getParticipants(), payersModel, sum);
                     break;
                 case PERCENTAGE:
-                    handlePercentageSplitFromParticipants(backendParts, request.getParticipants(), payers, sum);
+                    handlePercentageSplitFromParticipants(backendParts, request.getParticipants(), payersModel, sum);
                     break;
                 case EXACT_AMOUNTS:
-                    handleExactAmountsFromParticipants(backendParts, request.getParticipants(), payers, sum);
+                    handleExactAmountsFromParticipants(backendParts, request.getParticipants(), payersModel, sum);
                     break;
                 case SHARES:
-                    handleSharesFromParticipants(backendParts, request.getParticipants(), payers, sum);
+                    handleSharesFromParticipants(backendParts, request.getParticipants(), payersModel, sum);
                     break;
                 case ITEMIZED:
-                    // NEW: Call the helper function to compute owed amounts (including tax and tip)
                     Map<String, Double> owedMap = computeOwedItemizedTaxTip(
                             request.getParticipants(),
                             request.getItems(),
                             request.getTaxRate(),
                             request.getTipRate()
                     );
-                    // For each participant, create a backend participant entry using the computed value
                     for (ParticipantDTO pd : request.getParticipants()) {
-                        Participant part = new Participant();
+                        ExpenseDto.ParticipantDto part = new ExpenseDto.ParticipantDto();
                         part.setUserId(pd.getUserId());
                         part.setPartName(pd.getName());
                         double owed = owedMap.getOrDefault(pd.getUserId(), 0.0);
                         part.setShare(owed);
-                        // Determine what was paid based on the payer info
                         double paid = 0;
                         for (PayerDTO pDto : request.getPayers()) {
                             if (pDto.getUserId().equals(pd.getUserId())) {
@@ -176,12 +181,11 @@ public class ExpenseService {
                     }
                     break;
                 case TWO_PERSON:
-                    // NEW: Handle two person split.
-                    handleTwoPersonSplitFromParticipants(backendParts, request.getParticipants(), payers, sum, request.getCreatorId(), request.getFullOwe());
+                    handleTwoPersonSplitFromParticipants(backendParts, request.getParticipants(), payersModel, sum, request.getCreatorId(), request.getFullOwe());
                     break;
                 default:
                     logger.warn("Unknown splitMethod, defaulting to EQUAL split");
-                    handleEqualSplitFromParticipants(backendParts, request.getParticipants(), payers, sum);
+                    handleEqualSplitFromParticipants(backendParts, request.getParticipants(), payersModel, sum);
                     break;
             }
         }
@@ -189,31 +193,31 @@ public class ExpenseService {
         // 6) Compare frontEndParts vs. backendParts
         boolean mismatch = compareParticipants(frontEndParts, backendParts);
         if (mismatch) {
-            // Option A: override
             logger.warn("Mismatch detected between front-end participants and back-end computed participants. Overriding with backendParts.");
-            expense.setParticipants(backendParts);
+            expenseDto.setParticipants(backendParts);
         } else {
-            // Option B: trust frontEndParts
             logger.info("No mismatch, trusting front-end participants data");
-            expense.setParticipants(frontEndParts);
+            expenseDto.setParticipants(frontEndParts);
         }
 
         // 7) fill participant names from DB
         logger.debug("Filling participant names from DB...");
-        for (Participant p : expense.getParticipants()) {
+        for (ExpenseDto.ParticipantDto p : expenseDto.getParticipants()) {
             if (p.getUserId() == null) {
                 logger.warn("Participant userId is null, skipping name fetch");
                 continue;
             }
-            User user = userRepository.findById(p.getUserId())
+            UserDto user = userDao.findById(p.getUserId())
                     .orElseThrow(() -> new RuntimeException("Participant not found with ID: " + p.getUserId()));
             p.setPartName(user.getName());
         }
 
         // 8) set total, save
-        expense.setTotalAmount(sum);
-        Expense saved = expenseRepository.save(expense);
-        logger.info("Expense saved with id={}, totalAmount={}", saved.getId(), saved.getTotalAmount());
+        expenseDto.setTotalAmount(sum);
+        ExpenseDto savedDto = expenseDao.save(expenseDto);
+        logger.info("Expense saved with id={}, totalAmount={}", savedDto.getId(), savedDto.getTotalAmount());
+
+        Expense saved = toExpense(savedDto);
 
         // notifications, socket events
         sendExpenseNotification(saved, creator.getId(), creator.getName());
@@ -224,7 +228,7 @@ public class ExpenseService {
 
     // ---------- "FromParticipants" handle methods ----------
 
-    private void handleEqualSplitFromParticipants(List<Participant> backendParts,
+    private void handleEqualSplitFromParticipants(List<ExpenseDto.ParticipantDto> backendParts,
                                                   List<ParticipantDTO> frontEndParts,
                                                   List<Payer> payers,
                                                   double sum) {
@@ -232,33 +236,30 @@ public class ExpenseService {
         int count = frontEndParts.size();
         double each = (count > 0) ? sum / count : 0.0;
 
-        // Build a map for easy lookup of who paid how much
         Map<String, Double> paidMap = new HashMap<>();
         for (Payer payer : payers) {
             paidMap.put(payer.getUserId(), payer.getPaidAmount());
         }
 
         for (ParticipantDTO pd : frontEndParts) {
-            Participant part = new Participant();
+            ExpenseDto.ParticipantDto part = new ExpenseDto.ParticipantDto();
             part.setUserId(pd.getUserId());
             part.setPartName(pd.getName());
             part.setShare(each);
             double paid = paidMap.getOrDefault(pd.getUserId(), 0.0);
             part.setPaid(paid);
-            part.setNet(paid - each); // correctly computed net
+            part.setNet(paid - each);
             backendParts.add(part);
         }
         logger.debug("EqualSplit created {} backend participants", backendParts.size());
     }
 
-
-    private void handlePercentageSplitFromParticipants(List<Participant> backendParts,
+    private void handlePercentageSplitFromParticipants(List<ExpenseDto.ParticipantDto> backendParts,
                                                        List<ParticipantDTO> frontEndParts,
                                                        List<Payer> payers,
                                                        double sum) {
         logger.debug("handlePercentageSplitFromParticipants called, sum={}", sum);
 
-        // Calculate total percentage
         double totalPct = 0.0;
         for (ParticipantDTO pd : frontEndParts) {
             totalPct += (pd.getPercent() == null ? 0.0 : pd.getPercent());
@@ -269,13 +270,11 @@ public class ExpenseService {
             throw new RuntimeException("Percent does not sum to 100");
         }
 
-        // Build a map to easily retrieve paid amounts
         Map<String, Double> paidMap = new HashMap<>();
         for (Payer payer : payers) {
             paidMap.put(payer.getUserId(), payer.getPaidAmount());
         }
 
-        // Calculate share, paid, and net amounts
         for (ParticipantDTO pd : frontEndParts) {
             double pct = (pd.getPercent() == null) ? 0.0 : pd.getPercent();
             double share = (pct / 100.0) * sum;
@@ -283,7 +282,7 @@ public class ExpenseService {
             double paid = paidMap.getOrDefault(pd.getUserId(), 0.0);
             double net = paid - share;
 
-            Participant part = new Participant();
+            ExpenseDto.ParticipantDto part = new ExpenseDto.ParticipantDto();
             part.setUserId(pd.getUserId());
             part.setPartName(pd.getName());
             part.setShare(share);
@@ -296,8 +295,7 @@ public class ExpenseService {
         logger.debug("Percentage split created {} backend participants", backendParts.size());
     }
 
-
-    private void handleExactAmountsFromParticipants(List<Participant> backendParts,
+    private void handleExactAmountsFromParticipants(List<ExpenseDto.ParticipantDto> backendParts,
                                                     List<ParticipantDTO> frontEndParts,
                                                     List<Payer> payers,
                                                     double sum) {
@@ -313,19 +311,17 @@ public class ExpenseService {
             throw new RuntimeException("Exact amounts do not sum to total expense");
         }
 
-        // Create a paidMap for quick lookup
         Map<String, Double> paidMap = new HashMap<>();
         for (Payer payer : payers) {
             paidMap.put(payer.getUserId(), payer.getPaidAmount());
         }
 
-        // Set exact share, paid, and net amounts correctly
         for (ParticipantDTO pd : frontEndParts) {
             double exactShare = (pd.getExact() == null) ? 0.0 : pd.getExact();
             double paid = paidMap.getOrDefault(pd.getUserId(), 0.0);
             double net = paid - exactShare;
 
-            Participant part = new Participant();
+            ExpenseDto.ParticipantDto part = new ExpenseDto.ParticipantDto();
             part.setUserId(pd.getUserId());
             part.setPartName(pd.getName());
             part.setShare(exactShare);
@@ -344,41 +340,31 @@ public class ExpenseService {
             double taxRate,
             double tipRate
     ) {
-        // Step 1: Compute the subtotal and each participant's raw item share.
         double itemSubtotal = 0.0;
         Map<String, Double> userItemTotals = new HashMap<>();
-        // Initialize all participants to zero.
         for (ParticipantDTO p : participants) {
             userItemTotals.put(p.getUserId(), 0.0);
         }
-        // Process each item.
         for (ExpenseItemDTO item : items) {
             double amount = item.getAmount();
             itemSubtotal += amount;
-            // Sum all the fractions assigned in this item.
             double fractionSum = 0.0;
             for (Double fraction : item.getUserShares().values()) {
                 fractionSum += fraction;
             }
-            // If someone is assigned (fractionSum > 0), distribute the cost.
             if (fractionSum > 0) {
                 for (Map.Entry<String, Double> entry : item.getUserShares().entrySet()) {
                     String uid = entry.getKey();
                     double fraction = entry.getValue();
-                    // The user's share for this item is the item's amount multiplied by
-                    // their fraction divided by the total fraction sum.
                     double share = amount * (fraction / fractionSum);
                     userItemTotals.put(uid, userItemTotals.getOrDefault(uid, 0.0) + share);
                 }
             }
         }
 
-        // Step 2: Calculate tax and tip amounts for the overall expense.
         double taxAmount = itemSubtotal * (taxRate / 100.0);
         double tipAmount = (itemSubtotal + taxAmount) * (tipRate / 100.0);
-        // Grand total is not used further here but equals itemSubtotal + taxAmount + tipAmount.
 
-        // Step 3: Distribute tax and tip to each participant proportionally.
         Map<String, Double> finalTotals = new HashMap<>();
         for (ParticipantDTO p : participants) {
             String uid = p.getUserId();
@@ -390,12 +376,10 @@ public class ExpenseService {
             finalTotals.put(uid, totalOwed);
         }
 
-        return finalTotals; // This map contains each participant's total owed amount.
+        return finalTotals;
     }
 
-
-
-    private void handleSharesFromParticipants(List<Participant> backendParts,
+    private void handleSharesFromParticipants(List<ExpenseDto.ParticipantDto> backendParts,
                                               List<ParticipantDTO> frontEndParts,
                                               List<Payer> payers,
                                               double sum) {
@@ -411,20 +395,18 @@ public class ExpenseService {
             throw new RuntimeException("No shares specified");
         }
 
-        // Create paidMap for quick lookup
         Map<String, Double> paidMap = new HashMap<>();
         for (Payer payer : payers) {
             paidMap.put(payer.getUserId(), payer.getPaidAmount());
         }
 
-        // Properly set shares, paid, and net fields
         for (ParticipantDTO pd : frontEndParts) {
             int shares = (pd.getShares() == null) ? 0 : pd.getShares();
             double userShare = ((double) shares / totalShares) * sum;
             double paid = paidMap.getOrDefault(pd.getUserId(), 0.0);
             double net = paid - userShare;
 
-            Participant part = new Participant();
+            ExpenseDto.ParticipantDto part = new ExpenseDto.ParticipantDto();
             part.setUserId(pd.getUserId());
             part.setPartName(pd.getName());
             part.setShare(userShare);
@@ -437,21 +419,18 @@ public class ExpenseService {
         logger.debug("Shares split created {} backend participants", backendParts.size());
     }
 
-    // New logic to handle multiple payers in TWO_PERSON mode:
     private void handleTwoPersonSplitFromParticipants(
-            List<Participant> backendParts,
+            List<ExpenseDto.ParticipantDto> backendParts,
             List<ParticipantDTO> frontEndParts,
             List<Payer> payers,
             double sum,
             String creatorId,
-            String fullOwe // e.g., "you" or "other"
+            String fullOwe
     ) {
-        // Ensure exactly two participants
         if (frontEndParts.size() != 2) {
             throw new RuntimeException("Two person split requires exactly two participants");
         }
 
-        // Identify the two participants
         ParticipantDTO creatorPart = frontEndParts.stream()
                 .filter(p -> p.getUserId().equals(creatorId))
                 .findFirst()
@@ -461,7 +440,6 @@ public class ExpenseService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Other participant not found"));
 
-        // Aggregate contributions on both sides:
         double totalPaidByCreator = payers.stream()
                 .filter(p -> p.getUserId().equals(creatorId))
                 .mapToDouble(Payer::getPaidAmount)
@@ -473,11 +451,8 @@ public class ExpenseService {
 
         logger.debug("Aggregated payments - Creator: {}, Other: {}", totalPaidByCreator, totalPaidByOther);
 
-        // Now decide which side is expected to cover the expense based on fullOwe:
-        // Instead of enforcing equality with sum, we simply use the aggregated values.
         if ("you".equalsIgnoreCase(fullOwe)) {
-            // fullOwe = "you": creator owes full. So the non-creator (other) is credited with what they contributed.
-            Participant payerPart = new Participant();
+            ExpenseDto.ParticipantDto payerPart = new ExpenseDto.ParticipantDto();
             payerPart.setUserId(otherPart.getUserId());
             payerPart.setPartName(otherPart.getName());
             payerPart.setPaid(totalPaidByOther);
@@ -485,16 +460,15 @@ public class ExpenseService {
             payerPart.setNet(totalPaidByOther);
             backendParts.add(payerPart);
 
-            Participant borrowerPart = new Participant();
+            ExpenseDto.ParticipantDto borrowerPart = new ExpenseDto.ParticipantDto();
             borrowerPart.setUserId(creatorPart.getUserId());
             borrowerPart.setPartName(creatorPart.getName());
             borrowerPart.setPaid(totalPaidByCreator);
-            borrowerPart.setShare(sum); // Expectation: creator should cover sum
+            borrowerPart.setShare(sum);
             borrowerPart.setNet(totalPaidByCreator - sum);
             backendParts.add(borrowerPart);
         } else if ("other".equalsIgnoreCase(fullOwe)) {
-            // fullOwe = "other": other owes full. So the creator is credited.
-            Participant payerPart = new Participant();
+            ExpenseDto.ParticipantDto payerPart = new ExpenseDto.ParticipantDto();
             payerPart.setUserId(creatorPart.getUserId());
             payerPart.setPartName(creatorPart.getName());
             payerPart.setPaid(totalPaidByCreator);
@@ -502,7 +476,7 @@ public class ExpenseService {
             payerPart.setNet(totalPaidByCreator);
             backendParts.add(payerPart);
 
-            Participant borrowerPart = new Participant();
+            ExpenseDto.ParticipantDto borrowerPart = new ExpenseDto.ParticipantDto();
             borrowerPart.setUserId(otherPart.getUserId());
             borrowerPart.setPartName(otherPart.getName());
             borrowerPart.setPaid(totalPaidByOther);
@@ -514,45 +488,31 @@ public class ExpenseService {
         }
     }
 
-
-
-
-
-
-
-    // ---------- compare participants logic ----------
-    private boolean compareParticipants(List<Participant> frontEnd, List<Participant> backend) {
+    private boolean compareParticipants(List<ExpenseDto.ParticipantDto> frontEnd, List<ExpenseDto.ParticipantDto> backend) {
         logger.debug("Comparing front-end participants with backend participants");
-        // Return "true" if there's a mismatch
         if (frontEnd.size() != backend.size()) {
             logger.warn("Mismatch in size: frontEnd={}, backend={}", frontEnd.size(), backend.size());
-            return true; // mismatch in size
+            return true;
         }
-        // Sort them by userId if needed
-        // or assume same order
 
         for (int i = 0; i < frontEnd.size(); i++) {
-            Participant fe = frontEnd.get(i);
-            Participant be = backend.get(i);
-            // If userId is null, that's automatically a mismatch (or throw an error)
+            ExpenseDto.ParticipantDto fe = frontEnd.get(i);
+            ExpenseDto.ParticipantDto be = backend.get(i);
             if (fe.getUserId() == null || be.getUserId() == null) {
                 logger.warn("Null userId found in frontEndParts or backendParts at index={}", i);
                 return true;
             }
 
-            // Now safe to call .equals
             if (!fe.getUserId().equals(be.getUserId())) {
                 logger.warn("UserId mismatch at index={}, frontEnd={}, backend={}", i, fe.getUserId(), be.getUserId());
                 return true;
             }
 
-            // Compare "share" within tolerance
             double diff = Math.abs(fe.getShare() - be.getShare());
             if (diff > 0.01) {
                 logger.warn("Share mismatch at index={}, frontEnd share={}, backend share={}", i, fe.getShare(), be.getShare());
-                return true; // mismatch
+                return true;
             }
-            // If you want to also compare net, paid, etc.:
             double netDiff = Math.abs(fe.getNet() - be.getNet());
             if (netDiff > 0.01) {
                 logger.warn("Net mismatch at index={}, frontEnd net={}, backend net={}", i, fe.getNet(), be.getNet());
@@ -560,29 +520,21 @@ public class ExpenseService {
             }
         }
         logger.debug("No mismatch found between front-end and backend participants");
-        return false; // no mismatch
+        return false;
     }
 
     private void sendExpenseSocketEvent(Expense expense, String creatorId, String creatorName) {
         try {
-
-            // Build a payload
             ExpenseEventData data = new ExpenseEventData();
             data.setType("EXPENSE_CREATED");
             data.setExpenseId(expense.getId());
-            // If you store creatorId, you can set it. Or just pass the name
             data.setCreatorId(creatorId);
             data.setCreatorName(creatorName);
 
-            // We want to notify all participants (or payers, or both).
-            // For example, notify each participant by their email:
             for (Participant p : expense.getParticipants()) {
-                // Load the user to get their email
-                User user = userRepository.findById(p.getUserId())
-                        .orElse(null);
+                UserDto user = userDao.findById(p.getUserId()).orElse(null);
                 if (user != null) {
                     String email = user.getEmail();
-                    // Emit to the "room" named by that email
                     socketIOServer.getRoomOperations(email)
                             .sendEvent("expenseEvent", data);
                     logger.info("[ExpenseService] Socket.IO event [EXPENSE_CREATED] sent to room: {}", email);
@@ -595,61 +547,110 @@ public class ExpenseService {
 
     public Expense getExpenseById(String id) {
         logger.debug("getExpenseById called with id={}", id);
-        return expenseRepository.findById(id)
+        return expenseDao.findById(id)
+                .map(this::toExpense)
                 .orElseThrow(() -> new RuntimeException("Expense not found: " + id));
     }
 
-    // rename to getExpensesForUser
     public List<Expense> getExpensesForUser(String userId, String filter) {
         logger.debug("getExpensesForUser called with userId={}, filter={}", userId, filter);
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
-        return switch (filter.toUpperCase()) {
-            case "CREATOR" -> expenseRepository.findAllByCreatorId(userId, sort);
-            case "PAYER" -> expenseRepository.findAllByPayer(userId, sort);
-            case "PARTICIPANT" -> expenseRepository.findAllByParticipant(userId, sort);
-            default -> expenseRepository.findAllByUserInvolvement(userId, sort);
+        List<ExpenseDto> dtos = switch (filter.toUpperCase()) {
+            case "CREATOR" -> expenseDao.findAllByCreatorId(userId, sort);
+            case "PAYER" -> expenseDao.findAllByPayer(userId, sort);
+            case "PARTICIPANT" -> expenseDao.findAllByParticipant(userId, sort);
+            default -> expenseDao.findAllByUserInvolvement(userId, sort);
         };
+        
+        return dtos.stream().map(this::toExpense).collect(Collectors.toList());
     }
 
-    /**
-     * Retrieves expenses where both the logged-in user and the friend are involved.
-     *
-     * @param userId   Logged-in user's id.
-     * @param friendId Friend's id.
-     */
     public List<Expense> getExpensesForFriend(String userId, String friendId) {
         logger.debug("Fetching expenses for userId={} and friendId={}", userId, friendId);
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
-        return expenseRepository.findAllByBothUserInvolvement(userId, friendId, sort);
+        return expenseDao.findAllByBothUserInvolvement(userId, friendId, sort).stream()
+                .map(this::toExpense)
+                .collect(Collectors.toList());
     }
 
-    /**
-     * Retrieves expenses associated with a specific group.
-     *
-     * @param groupId Group id.
-     */
     public List<Expense> getExpensesForGroup(String groupId) {
         logger.debug("Fetching expenses for groupId={}", groupId);
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
-        return expenseRepository.findAllByGroupId(groupId, sort);
+        return expenseDao.findAllByGroupId(groupId, sort).stream()
+                .map(this::toExpense)
+                .collect(Collectors.toList());
     }
-
-
-
 
     private void sendExpenseNotification(Expense expense, String creatorId, String creatorName) {
         logger.debug("Sending expense notification for expenseId={}, creatorId={}", expense.getId(), creatorId);
-        // Suppose you want to notify each participant
         for (Participant p : expense.getParticipants()) {
             notificationService.createNotification(
                     p.getUserId(),
                     "You have a new expense: " + expense.getDescription(),
-                    expense.getId(), //reference to expense ID
+                    expense.getId(),
                     creatorName,
-                    creatorId,                      // or whoever created the expense
-                    "EXPENSE"                      // type
+                    creatorId,
+                    "EXPENSE"
             );
         }
+    }
+
+    // --- Conversion helpers ---
+
+    private Expense toExpense(ExpenseDto dto) {
+        Expense expense = new Expense();
+        expense.setId(dto.getId());
+        expense.setDescription(dto.getDescription());
+        expense.setCategory(dto.getCategory());
+        expense.setTotalAmount(dto.getTotalAmount());
+        expense.setDate(dto.getDate());
+        expense.setNotes(dto.getNotes());
+        expense.setGroupId(dto.getGroupId());
+        expense.setGroupName(dto.getGroupName());
+        expense.setSplitMethod(dto.getSplitMethod());
+        expense.setCreatorId(dto.getCreatorId());
+        expense.setCreatorName(dto.getCreatorName());
+        expense.setCreatedAt(dto.getCreatedAt());
+        expense.setUpdatedAt(dto.getUpdatedAt());
+        expense.setTaxRate(dto.getTaxRate());
+        expense.setTipRate(dto.getTipRate());
+
+        if (dto.getPayers() != null) {
+            expense.setPayers(dto.getPayers().stream().map(p -> {
+                Payer payer = new Payer();
+                payer.setUserId(p.getUserId());
+                payer.setPayerName(p.getPayerName());
+                payer.setPaidAmount(p.getPaidAmount());
+                return payer;
+            }).collect(Collectors.toList()));
+        }
+
+        if (dto.getParticipants() != null) {
+            expense.setParticipants(dto.getParticipants().stream().map(p -> {
+                Participant part = new Participant();
+                part.setUserId(p.getUserId());
+                part.setPartName(p.getPartName());
+                part.setPercent(p.getPercent());
+                part.setExact(p.getExact());
+                part.setShares(p.getShares());
+                part.setShare(p.getShare());
+                part.setPaid(p.getPaid());
+                part.setNet(p.getNet());
+                return part;
+            }).collect(Collectors.toList()));
+        }
+
+        if (dto.getItems() != null) {
+            expense.setItems(dto.getItems().stream().map(i -> {
+                ExpenseItem item = new ExpenseItem();
+                item.setName(i.getName());
+                item.setAmount(i.getAmount());
+                item.setUserShares(i.getUserShares());
+                return item;
+            }).collect(Collectors.toList()));
+        }
+
+        return expense;
     }
 }

@@ -2,13 +2,15 @@ package com.splitzy.splitzy.controller;
 
 import com.splitzy.splitzy.model.RedisUser;
 import com.splitzy.splitzy.model.User;
-import com.splitzy.splitzy.repository.UserRepository;
 import com.splitzy.splitzy.service.CustomUserDetailsService;
 import com.splitzy.splitzy.service.EmailService;
 import com.splitzy.splitzy.service.RedisCacheService;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import com.splitzy.splitzy.util.JwtUtil;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -47,7 +49,7 @@ public class AuthController {
     private EmailService emailService;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
     private RedisCacheService redisCacheService;
@@ -61,7 +63,7 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            User userFromDatabase = userRepository.findByEmail(user.getEmail())
+            UserDto userFromDatabase = userDao.findByEmail(user.getEmail())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
             // Authenticate
@@ -78,8 +80,7 @@ public class AuthController {
             response.put("id", userFromDatabase.getId());
             response.put("name", userFromDatabase.getName());
             response.put("email", userFromDatabase.getEmail());
-
-            response.put("friendIds",userFromDatabase.getFriendIds());
+            response.put("friendIds", userFromDatabase.getFriendIds());
 
             return ResponseEntity.ok(response);
 
@@ -194,7 +195,7 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
         String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
+        UserDto user = userDao.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         Map<String, Object> response = new HashMap<>();

@@ -29,6 +29,7 @@ public class User {
     private String password;
     private String verificationToken; // For email verification
     private boolean verified; // To check if the user is verified
+    private String avatarUrl;
 
     private Set<String> friendIds = new HashSet<>();
     private Set<String> groupIds = new HashSet<>();

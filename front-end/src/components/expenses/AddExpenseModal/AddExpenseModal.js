@@ -246,6 +246,8 @@ function AddExpenseModal({ onClose, onSave }) {
   // 2) Basic Expense Fields
   // --------------------------
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("general");
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [amount, setAmount] = useState(0);
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -253,6 +255,31 @@ function AddExpenseModal({ onClose, onSave }) {
   const [availableGroups, setAvailableGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
+
+  // Category options with icons
+  const CATEGORIES = [
+    { key: "general", label: "General", icon: "💰" },
+    { key: "food", label: "Food & Dining", icon: "🍽️" },
+    { key: "groceries", label: "Groceries", icon: "🛒" },
+    { key: "transport", label: "Transport", icon: "🚗" },
+    { key: "entertainment", label: "Entertainment", icon: "🎬" },
+    { key: "shopping", label: "Shopping", icon: "🛍️" },
+    { key: "travel", label: "Travel", icon: "✈️" },
+    { key: "utilities", label: "Utilities", icon: "💡" },
+    { key: "rent", label: "Rent", icon: "🏠" },
+    { key: "healthcare", label: "Healthcare", icon: "🏥" },
+    { key: "education", label: "Education", icon: "📚" },
+    { key: "subscriptions", label: "Subscriptions", icon: "📱" },
+    { key: "gifts", label: "Gifts", icon: "🎁" },
+    { key: "sports", label: "Sports & Fitness", icon: "⚽" },
+    { key: "pets", label: "Pets", icon: "🐾" },
+    { key: "coffee", label: "Coffee & Drinks", icon: "☕" },
+    { key: "games", label: "Games", icon: "🎮" },
+    { key: "music", label: "Music & Events", icon: "🎵" },
+    { key: "other", label: "Other", icon: "📝" },
+  ];
+
+  const selectedCategory = CATEGORIES.find(c => c.key === category) || CATEGORIES[0];
 
   useEffect(() => {
     // Fetch groups for the current user
@@ -663,6 +690,7 @@ function AddExpenseModal({ onClose, onSave }) {
     const finalData = {
       participants: computedParticipants.map(p => ({ ...p, userId: p.id })),
       description,
+      category,
       amount,
       date,
       notes,
@@ -811,7 +839,7 @@ function AddExpenseModal({ onClose, onSave }) {
               />
             </div>
             {searchResults.length > 0 && (
-              <div className="dropdown-list">
+              <div className="dropdown-list open">
                 {searchResults.map((u) => (
                   <div
                     key={u.id}
@@ -822,6 +850,38 @@ function AddExpenseModal({ onClose, onSave }) {
                     <span className="tile-title">{u.name}</span>
                     <span className="tile-sub">{u.email}</span>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Category Picker */}
+          <div className="form-section">
+            <label className="label">Category</label>
+            <button 
+              type="button"
+              className="category-selector"
+              onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+            >
+              <span className="category-icon">{selectedCategory.icon}</span>
+              <span className="category-label">{selectedCategory.label}</span>
+              <span className="category-arrow">▼</span>
+            </button>
+            {showCategoryPicker && (
+              <div className="category-picker">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    className={`category-option ${category === cat.key ? 'active' : ''}`}
+                    onClick={() => {
+                      setCategory(cat.key);
+                      setShowCategoryPicker(false);
+                    }}
+                  >
+                    <span className="cat-icon">{cat.icon}</span>
+                    <span className="cat-label">{cat.label}</span>
+                  </button>
                 ))}
               </div>
             )}
