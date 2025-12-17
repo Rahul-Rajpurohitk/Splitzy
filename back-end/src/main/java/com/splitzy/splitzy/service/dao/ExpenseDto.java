@@ -1,5 +1,6 @@
 package com.splitzy.splitzy.service.dao;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.splitzy.splitzy.model.SplitMethod;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +30,8 @@ public class ExpenseDto {
     private LocalDateTime updatedAt;
     private double taxRate;
     private double tipRate;
+    private boolean isPersonal = false;
+    private boolean isSettled = false;
 
     public ExpenseDto() {}
 
@@ -87,6 +90,14 @@ public class ExpenseDto {
     public double getTipRate() { return tipRate; }
     public void setTipRate(double tipRate) { this.tipRate = tipRate; }
 
+    @JsonProperty("isPersonal")
+    public boolean isPersonal() { return isPersonal; }
+    public void setPersonal(boolean personal) { isPersonal = personal; }
+
+    @JsonProperty("isSettled")
+    public boolean isSettled() { return isSettled; }
+    public void setSettled(boolean settled) { isSettled = settled; }
+
     /**
      * Nested DTO for Payer.
      */
@@ -125,6 +136,8 @@ public class ExpenseDto {
         private double share;
         private double paid;
         private double net;
+        private double settledAmount = 0;
+        private boolean isFullySettled = false;
 
         public ParticipantDto() {}
 
@@ -151,6 +164,13 @@ public class ExpenseDto {
 
         public double getNet() { return net; }
         public void setNet(double net) { this.net = net; }
+
+        public double getSettledAmount() { return settledAmount; }
+        public void setSettledAmount(double settledAmount) { this.settledAmount = settledAmount; }
+
+        @JsonProperty("isFullySettled")
+        public boolean isFullySettled() { return isFullySettled; }
+        public void setFullySettled(boolean fullySettled) { isFullySettled = fullySettled; }
     }
 
     /**

@@ -2,12 +2,13 @@ package com.splitzy.splitzy.controller;
 
 import com.splitzy.splitzy.dto.analytics.*;
 import com.splitzy.splitzy.service.analytics.AnalyticsService;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -24,6 +25,9 @@ public class AnalyticsController {
 
     @Autowired
     private AnalyticsService analyticsService;
+    
+    @Autowired
+    private UserDao userDao;
 
     /**
      * Get dashboard summary with all key metrics.
@@ -199,11 +203,11 @@ public class AnalyticsController {
         if (auth == null) {
             throw new RuntimeException("Not authenticated");
         }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof Jwt) {
-            return ((Jwt) principal).getSubject();
-        }
-        return principal.toString();
+        // auth.getName() returns the email from JWT subject
+        String email = auth.getName();
+        UserDto user = userDao.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found: " + email));
+        return user.getId();
     }
 
     private AnalyticsFilter.TimeGranularity parseGranularity(String granularity) {

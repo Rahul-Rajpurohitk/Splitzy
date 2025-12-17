@@ -35,6 +35,9 @@ public class CreateExpenseRequest {
     private double tipRate;
 
     private String fullOwe;
+    
+    // Personal expense flag - not shared with others
+    private boolean isPersonal = false;
 
 
     /*

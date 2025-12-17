@@ -56,6 +56,12 @@ public class ExpenseSql {
 
     private double taxRate;
     private double tipRate;
+    
+    // Personal expense flag - expenses that are not shared with others
+    private boolean isPersonal = false;
+    
+    // Settlement status
+    private boolean isSettled = false;
 
     public ExpenseSql() {}
 
@@ -202,6 +208,22 @@ public class ExpenseSql {
 
     public void setTipRate(double tipRate) {
         this.tipRate = tipRate;
+    }
+
+    public boolean isPersonal() {
+        return isPersonal;
+    }
+
+    public void setPersonal(boolean personal) {
+        isPersonal = personal;
+    }
+
+    public boolean isSettled() {
+        return isSettled;
+    }
+
+    public void setSettled(boolean settled) {
+        isSettled = settled;
     }
 }
 

@@ -2,6 +2,7 @@ package com.splitzy.splitzy.service;
 
 import com.corundumstudio.socketio.SocketIOServer;
 import com.splitzy.splitzy.dto.*;
+import com.splitzy.splitzy.dto.SettleExpenseRequest;
 import com.splitzy.splitzy.model.*;
 import com.splitzy.splitzy.service.dao.ExpenseDao;
 import com.splitzy.splitzy.service.dao.ExpenseDto;
@@ -73,6 +74,8 @@ public class ExpenseService {
         expenseDto.setSplitMethod(splitMethod);
         expenseDto.setTaxRate(request.getTaxRate());
         expenseDto.setTipRate(request.getTipRate());
+        expenseDto.setPersonal(request.isPersonal());
+        expenseDto.setSettled(false);
         logger.debug("Split method set to: {}", splitMethod);
 
         // 2) Process items
@@ -582,6 +585,87 @@ public class ExpenseService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Delete an expense by ID.
+     */
+    public void deleteExpense(String expenseId) {
+        logger.info("deleteExpense called for expenseId={}", expenseId);
+        ExpenseDto expense = expenseDao.findById(expenseId)
+                .orElseThrow(() -> new RuntimeException("Expense not found: " + expenseId));
+        expenseDao.deleteById(expenseId);
+        logger.info("Expense deleted: {}", expenseId);
+    }
+
+    /**
+     * Settle an expense for a specific participant (full or partial).
+     */
+    public Expense settleExpense(String expenseId, SettleExpenseRequest request) {
+        logger.info("settleExpense called for expenseId={}, participantUserId={}", expenseId, request.getParticipantUserId());
+        
+        ExpenseDto expense = expenseDao.findById(expenseId)
+                .orElseThrow(() -> new RuntimeException("Expense not found: " + expenseId));
+        
+        // Find the participant and update their settled amount
+        for (ExpenseDto.ParticipantDto participant : expense.getParticipants()) {
+            if (participant.getUserId().equals(request.getParticipantUserId())) {
+                double amountOwed = Math.abs(participant.getNet());
+                double currentSettled = participant.getSettledAmount();
+                
+                double settleAmount;
+                if (request.isSettleFullAmount()) {
+                    settleAmount = amountOwed - currentSettled;
+                } else {
+                    settleAmount = Math.min(request.getSettleAmount(), amountOwed - currentSettled);
+                }
+                
+                participant.setSettledAmount(currentSettled + settleAmount);
+                
+                // Check if fully settled
+                if (Math.abs(participant.getSettledAmount() - amountOwed) < 0.01) {
+                    participant.setFullySettled(true);
+                }
+                
+                logger.info("Participant {} settled ${} (total settled: ${})", 
+                    request.getParticipantUserId(), settleAmount, participant.getSettledAmount());
+                break;
+            }
+        }
+        
+        // Check if all participants are fully settled
+        boolean allSettled = expense.getParticipants().stream()
+                .allMatch(p -> p.isFullySettled() || Math.abs(p.getNet()) < 0.01);
+        expense.setSettled(allSettled);
+        
+        expense.setUpdatedAt(LocalDateTime.now());
+        ExpenseDto savedDto = expenseDao.save(expense);
+        
+        return toExpense(savedDto);
+    }
+
+    /**
+     * Mark an entire expense as fully settled (all participants).
+     */
+    public Expense settleExpenseFull(String expenseId) {
+        logger.info("settleExpenseFull called for expenseId={}", expenseId);
+        
+        ExpenseDto expense = expenseDao.findById(expenseId)
+                .orElseThrow(() -> new RuntimeException("Expense not found: " + expenseId));
+        
+        // Mark all participants as fully settled
+        for (ExpenseDto.ParticipantDto participant : expense.getParticipants()) {
+            double amountOwed = Math.abs(participant.getNet());
+            participant.setSettledAmount(amountOwed);
+            participant.setFullySettled(true);
+        }
+        
+        expense.setSettled(true);
+        expense.setUpdatedAt(LocalDateTime.now());
+        ExpenseDto savedDto = expenseDao.save(expense);
+        
+        logger.info("Expense {} fully settled", expenseId);
+        return toExpense(savedDto);
+    }
+
     private void sendExpenseNotification(Expense expense, String creatorId, String creatorName) {
         logger.debug("Sending expense notification for expenseId={}, creatorId={}", expense.getId(), creatorId);
         for (Participant p : expense.getParticipants()) {
@@ -615,6 +699,8 @@ public class ExpenseService {
         expense.setUpdatedAt(dto.getUpdatedAt());
         expense.setTaxRate(dto.getTaxRate());
         expense.setTipRate(dto.getTipRate());
+        expense.setPersonal(dto.isPersonal());
+        expense.setSettled(dto.isSettled());
 
         if (dto.getPayers() != null) {
             expense.setPayers(dto.getPayers().stream().map(p -> {
@@ -637,6 +723,8 @@ public class ExpenseService {
                 part.setShare(p.getShare());
                 part.setPaid(p.getPaid());
                 part.setNet(p.getNet());
+                part.setSettledAmount(p.getSettledAmount());
+                part.setFullySettled(p.isFullySettled());
                 return part;
             }).collect(Collectors.toList()));
         }

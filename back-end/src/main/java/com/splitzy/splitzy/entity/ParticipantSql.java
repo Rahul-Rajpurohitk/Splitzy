@@ -9,6 +9,10 @@ public class ParticipantSql {
     private double paid;
     private double share;
     private double net;
+    
+    // Payment tracking fields
+    private double settledAmount = 0; // Amount already settled/paid by this participant
+    private boolean isFullySettled = false; // Whether this participant's share is fully settled
 
     public String getUserId() {
         return userId;
@@ -48,6 +52,22 @@ public class ParticipantSql {
 
     public void setNet(double net) {
         this.net = net;
+    }
+
+    public double getSettledAmount() {
+        return settledAmount;
+    }
+
+    public void setSettledAmount(double settledAmount) {
+        this.settledAmount = settledAmount;
+    }
+
+    public boolean isFullySettled() {
+        return isFullySettled;
+    }
+
+    public void setFullySettled(boolean fullySettled) {
+        isFullySettled = fullySettled;
     }
 }
 

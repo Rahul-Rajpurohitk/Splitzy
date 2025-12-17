@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
 import Friends from './Friends';
 import Notification from './Notification';
@@ -10,29 +10,86 @@ import ExpenseCenter from './expenses/ExpenseCenter';
 import '../home.css';
 import Groups from './Groups';
 import ProfilePanel from './ProfilePanel';
-import { FiHome, FiBarChart2 } from 'react-icons/fi';
+import { 
+  FiHome, FiBarChart2, FiUsers, FiX, FiClock, 
+  FiChevronDown, FiChevronUp, FiDollarSign, FiTrendingUp, FiPieChart
+} from 'react-icons/fi';
 import ChatDropdown from './chat/ChatDropdown';
 import ChatWindow from './chat/ChatWindow';
 import AnalyticsDashboard from './analytics/AnalyticsDashboard';
 
+const API_URL = process.env.REACT_APP_API_URL;
+
+// Category icons for recent activity
+const CATEGORY_ICONS = {
+  food: '🍕', dining: '🍕', restaurant: '🍕',
+  groceries: '🛒', shopping: '🛍️',
+  transport: '🚗', transportation: '🚗', travel: '✈️',
+  entertainment: '🎬', movies: '🎬',
+  utilities: '⚡', bills: '📄',
+  rent: '🏠', housing: '🏠',
+  healthcare: '❤️', medical: '❤️',
+  education: '📚', fitness: '💪', gym: '💪',
+  subscriptions: '💳', gifts: '🎁',
+  events: '🎉', pets: '🐕',
+  other: '📋'
+};
+
+function getCategoryIcon(category) {
+  if (!category) return '📋';
+  const lower = category.toLowerCase();
+  for (const [key, icon] of Object.entries(CATEGORY_ICONS)) {
+    if (lower.includes(key)) return icon;
+  }
+  return '📋';
+}
+
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function Home() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const myUserId = localStorage.getItem('myUserId');
   const username = localStorage.getItem('myUserName');
   const avatarUrl = localStorage.getItem('myUserAvatar') || '';
 
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [selectedView, setSelectedView] = useState('dashboard'); // dashboard | profile | settings
-  // Multiple chat windows: { thread, minimized }
+  const [selectedView, setSelectedView] = useState('dashboard');
+  const [showRightPanel, setShowRightPanel] = useState(true);
   const [openChats, setOpenChats] = useState([]);
+  
+  // Recent activity state
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [activityExpanded, setActivityExpanded] = useState(true);
 
-  const MAX_OPEN_CHATS = 4; // Limit max open chat windows
+  // Auto-hide right panel when switching to analytics
+  useEffect(() => {
+    if (selectedView === 'analytics') {
+      setShowRightPanel(false);
+    } else if (selectedView === 'dashboard') {
+      setShowRightPanel(true);
+    }
+  }, [selectedView]);
+
+  const MAX_OPEN_CHATS = 4;
 
   const handleOpenChat = (thread) => {
-    // Check if already open
     const existing = openChats.find(c => c.thread.id === thread.id);
     if (existing) {
-      // If minimized, expand it
       if (existing.minimized) {
         setOpenChats(prev => prev.map(c => 
           c.thread.id === thread.id ? { ...c, minimized: false } : c
@@ -40,10 +97,8 @@ function Home() {
       }
       return;
     }
-    // Add new chat (with limit)
     setOpenChats(prev => {
       if (prev.length >= MAX_OPEN_CHATS) {
-        // Close the oldest one and add new
         return [...prev.slice(1), { thread, minimized: false }];
       }
       return [...prev, { thread, minimized: false }];
@@ -71,8 +126,8 @@ function Home() {
 
   // Calculate user's overall balance
   const balanceData = useMemo(() => {
-    let totalOwed = 0;  // Money others owe you (positive net)
-    let totalOwing = 0; // Money you owe others (negative net)
+    let totalOwed = 0;
+    let totalOwing = 0;
     let expenseCount = expenses.length;
 
     expenses.forEach((expense) => {
@@ -97,6 +152,65 @@ function Home() {
     };
   }, [expenses, myUserId]);
 
+  // Calculate additional stats for left panel
+  const statsData = useMemo(() => {
+    const thisMonth = new Date();
+    const lastMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth() - 1, 1);
+    
+    let thisMonthTotal = 0;
+    let lastMonthTotal = 0;
+    let personalCount = 0;
+    let settledCount = 0;
+    
+    expenses.forEach(exp => {
+      const expDate = new Date(exp.date || exp.createdAt);
+      const myPart = exp.participants?.find(p => p.userId === myUserId);
+      
+      if (expDate.getMonth() === thisMonth.getMonth() && expDate.getFullYear() === thisMonth.getFullYear()) {
+        thisMonthTotal += exp.totalAmount || 0;
+      } else if (expDate.getMonth() === lastMonth.getMonth() && expDate.getFullYear() === lastMonth.getFullYear()) {
+        lastMonthTotal += exp.totalAmount || 0;
+      }
+      
+      if (exp.isPersonal) personalCount++;
+      if (exp.isSettled) settledCount++;
+    });
+    
+    const monthOverMonth = lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal * 100) : 0;
+    
+    return {
+      thisMonthTotal,
+      lastMonthTotal,
+      monthOverMonth,
+      personalCount,
+      settledCount,
+      avgPerExpense: expenses.length > 0 ? expenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0) / expenses.length : 0
+    };
+  }, [expenses, myUserId]);
+
+  // Recent activity from expenses (most recent 5)
+  useEffect(() => {
+    const sorted = [...expenses].sort((a, b) => 
+      new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
+    );
+    
+    const recent = sorted.slice(0, 5).map(exp => {
+      const myPart = exp.participants?.find(p => p.userId === myUserId);
+      const net = myPart?.net || 0;
+      return {
+        id: exp.id,
+        description: exp.description,
+        category: exp.category,
+        amount: exp.totalAmount,
+        net,
+        date: exp.createdAt || exp.date,
+        groupName: exp.groupName
+      };
+    });
+    
+    setRecentActivity(recent);
+  }, [expenses, myUserId]);
+
   useEffect(() => {
     const token = localStorage.getItem('splitzyToken');
     if (!token) {
@@ -105,7 +219,7 @@ function Home() {
     }
 
     axios
-      .get(`${process.env.REACT_APP_API_URL}/home`, {
+      .get(`${API_URL}/home`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((response) => {
@@ -172,6 +286,16 @@ function Home() {
               <FiBarChart2 size={16} />
               <span className="nav-icon-text">Analytics</span>
             </button>
+            {!showRightPanel && (
+              <button
+                className="nav-icon-pill panel-toggle"
+                title="Show Friends & Groups"
+                onClick={() => setShowRightPanel(true)}
+              >
+                <FiUsers size={16} />
+                <span className="nav-icon-text">People</span>
+              </button>
+            )}
             <ChatDropdown onSelectThread={(t) => { 
               console.log("[Home] onSelectThread received:", t);
               handleOpenChat(t); 
@@ -203,8 +327,8 @@ function Home() {
           </div>
         </header>
 
-        <div className="main-grid">
-          {/* Left Panel - Balance & Quick Actions */}
+        <div className={`main-grid ${!showRightPanel ? 'right-panel-hidden' : ''}`}>
+          {/* Left Panel - Balance & Activity */}
           <aside className="panel left-panel">
             <div className="panel-header">
               <span>Your Balance</span>
@@ -231,25 +355,52 @@ function Home() {
               </div>
             </div>
 
-            {/* Activity Stats */}
+            {/* Monthly Spending Summary */}
             <div className="panel-header spaced">
-              <span>Activity</span>
+              <span className="activity-header-text">
+                <FiTrendingUp size={12} />
+                This Month
+              </span>
             </div>
-            <div className="stats-row">
-              <div className="stat-item">
-                <span className="stat-value">{balanceData.expenseCount}</span>
-                <span className="stat-label">Expenses</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-value">{expenses.filter(e => {
-                  const p = e.participants?.find(x => x.userId === myUserId);
-                  return p && p.net !== 0;
-                }).length}</span>
-                <span className="stat-label">Unsettled</span>
+            <div className="monthly-summary-card">
+              <div className="monthly-amount">${statsData.thisMonthTotal.toFixed(0)}</div>
+              <div className="monthly-comparison">
+                {statsData.monthOverMonth !== 0 && (
+                  <span className={`trend-badge ${statsData.monthOverMonth > 0 ? 'up' : 'down'}`}>
+                    {statsData.monthOverMonth > 0 ? '↑' : '↓'} {Math.abs(statsData.monthOverMonth).toFixed(0)}%
+                  </span>
+                )}
+                <span className="vs-last">vs last month</span>
               </div>
             </div>
 
-            {/* Quick Actions - below highlights */}
+            {/* Key Stats Grid */}
+            <div className="stats-grid-compact">
+              <div className="stat-compact">
+                <FiDollarSign size={14} className="stat-icon" />
+                <div className="stat-info">
+                  <span className="stat-num">{balanceData.expenseCount}</span>
+                  <span className="stat-txt">Total</span>
+                </div>
+              </div>
+              <div className="stat-compact">
+                <FiPieChart size={14} className="stat-icon" />
+                <div className="stat-info">
+                  <span className="stat-num">{statsData.personalCount}</span>
+                  <span className="stat-txt">Personal</span>
+                </div>
+              </div>
+              <div className="stat-compact settled">
+                <span className="stat-num">{statsData.settledCount}</span>
+                <span className="stat-txt">Settled</span>
+              </div>
+              <div className="stat-compact">
+                <span className="stat-num">${statsData.avgPerExpense.toFixed(0)}</span>
+                <span className="stat-txt">Avg</span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
             <div className="panel-header spaced">
               <span>Quick actions</span>
             </div>
@@ -257,14 +408,57 @@ function Home() {
               <button className="qa-btn" onClick={() => window.dispatchEvent(new CustomEvent('modalOpened'))}>
                 New expense
               </button>
-              <button className="qa-btn ghost">Invite a friend</button>
-              <button className="qa-btn ghost">Create group</button>
+              <button className="qa-btn ghost" onClick={() => setSelectedView('analytics')}>
+                View analytics
+              </button>
+            </div>
+
+            {/* Recent Activity - Always at bottom */}
+            <div className="recent-activity-section">
+              <div 
+                className="panel-header spaced clickable" 
+                onClick={() => setActivityExpanded(!activityExpanded)}
+              >
+                <span className="activity-header-text">
+                  <FiClock size={12} />
+                  Recent Activity
+                </span>
+                {activityExpanded ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+              </div>
+              
+              {activityExpanded && (
+                <div className="activity-list">
+                  {recentActivity.length > 0 ? (
+                    recentActivity.map((activity, idx) => (
+                      <div key={activity.id || idx} className="activity-item">
+                        <div className="activity-icon">
+                          {getCategoryIcon(activity.category)}
+                        </div>
+                        <div className="activity-content">
+                          <span className="activity-desc">{activity.description}</span>
+                          <span className="activity-meta">
+                            {activity.groupName && <span className="activity-group">{activity.groupName}</span>}
+                            <span className="activity-time">{formatTimeAgo(activity.date)}</span>
+                          </span>
+                        </div>
+                        <div className={`activity-amount ${activity.net >= 0 ? 'positive' : 'negative'}`}>
+                          {activity.net >= 0 ? '+' : ''}{activity.net.toFixed(2)}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="no-activity">No recent activity</div>
+                  )}
+                </div>
+              )}
             </div>
           </aside>
 
           {/* Center Panel - Expenses / Analytics / Profile */}
           <section className="panel center-panel">
-            {selectedView === 'dashboard' && <ExpenseCenter onOpenChat={handleOpenChat} />}
+            {selectedView === 'dashboard' && (
+              <ExpenseCenter onOpenChat={handleOpenChat} />
+            )}
             {selectedView === 'analytics' && <AnalyticsDashboard />}
             {selectedView === 'profile' && (
               <ProfilePanel
@@ -280,21 +474,34 @@ function Home() {
           </section>
 
           {/* Right Panel - Friends & Groups */}
-          <aside className="panel sidebar">
-            <Friends />
-            <div className="panel-divider" />
-            <Groups />
+          <aside className={`panel sidebar ${!showRightPanel ? 'panel-collapsed' : ''}`}>
+            {showRightPanel && (
+              <>
+                <div className="sidebar-header">
+                  <span className="sidebar-title">People</span>
+                  <button 
+                    className="sidebar-close-btn"
+                    onClick={() => setShowRightPanel(false)}
+                    title="Hide panel"
+                  >
+                    <FiX size={14} />
+                  </button>
+                </div>
+                <Friends />
+                <div className="panel-divider" />
+                <Groups />
+              </>
+            )}
           </aside>
         </div>
-        {/* Multiple chat windows - position based on cumulative width of chats to the right */}
+        {/* Multiple chat windows */}
         <div className="chat-windows-container">
           {openChats.map((chat, idx) => {
-            // Calculate position based on actual widths of chats to the right (lower indices)
             const EXPANDED_WIDTH = 380;
             const MINIMIZED_WIDTH = 160;
             const GAP = 20;
             
-            let rightPosition = 20; // Start position
+            let rightPosition = 20;
             for (let i = 0; i < idx; i++) {
               rightPosition += (openChats[i].minimized ? MINIMIZED_WIDTH : EXPANDED_WIDTH) + GAP;
             }

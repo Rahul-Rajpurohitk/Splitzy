@@ -26,12 +26,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
+
+    @Value("${spring.profiles.active:default}")
+    private String activeProfile;
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private static final Pattern STRONG_PASSWORD = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).{8,}$");
@@ -205,6 +209,52 @@ public class AuthController {
         response.put("friendIds", user.getFriendIds());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Test-only endpoint to create users without email verification.
+     * Only available in non-production profiles.
+     */
+    @PostMapping("/test-signup")
+    public ResponseEntity<Map<String, Object>> testSignup(@RequestBody User user) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Block in production
+        if ("prod".equalsIgnoreCase(activeProfile) || "production".equalsIgnoreCase(activeProfile)) {
+            response.put("error", "This endpoint is not available in production");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+        
+        logger.info("Test signup request for email: {}", user.getEmail());
+        
+        try {
+            // Check if user already exists
+            if (userDetailsService.userExists(user.getEmail())) {
+                response.put("error", "User already exists");
+                return ResponseEntity.ok(response);
+            }
+            
+            // Create user directly without email verification
+            User newUser = new User();
+            newUser.setName(user.getName());
+            newUser.setEmail(user.getEmail());
+            newUser.setPassword(user.getPassword()); // Will be encoded by save()
+            newUser.setVerified(true);
+            newUser.setFriendIds(new HashSet<>());
+            
+            userDetailsService.save(newUser);
+            
+            logger.info("Test user created: {}", user.getEmail());
+            response.put("message", "User created successfully");
+            response.put("email", user.getEmail());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Test signup failed for email: {}", user.getEmail(), e);
+            response.put("error", "Failed to create user: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
 }

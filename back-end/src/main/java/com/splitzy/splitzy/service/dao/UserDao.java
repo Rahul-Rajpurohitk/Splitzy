@@ -36,5 +36,12 @@ public interface UserDao {
             save(user);
         });
     }
+
+    default void updateFriendIds(String userId, Set<String> friendIds) {
+        findById(userId).ifPresent(user -> {
+            user.setFriendIds(friendIds);
+            save(user);
+        });
+    }
 }
 

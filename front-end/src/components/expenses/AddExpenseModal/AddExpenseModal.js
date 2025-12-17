@@ -240,6 +240,7 @@ function AddExpenseModal({ onClose, onSave }) {
   const [tipRate, setTipRate] = useState(0);
   const [splitError, setSplitError] = useState("");
   const [fullOwe, setFullOwe] = useState("you"); // "you" means creator owes full; "other" means the other participant owes full
+  const [isPersonal, setIsPersonal] = useState(false); // Personal expense - not shared with others
 
 
     // --------------------------
@@ -703,7 +704,8 @@ function AddExpenseModal({ onClose, onSave }) {
       items,
       taxRate,
       tipRate,
-      fullOwe
+      fullOwe,
+      isPersonal
     };    
     onSave(finalData);
   };
@@ -819,6 +821,36 @@ function AddExpenseModal({ onClose, onSave }) {
             <button className="close-btn" onClick={onClose}>×</button>
           </div>
 
+          {/* Personal Expense Toggle */}
+          <div className="personal-expense-toggle">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={isPersonal}
+                onChange={(e) => {
+                  setIsPersonal(e.target.checked);
+                  if (e.target.checked) {
+                    // Reset to just the creator when switching to personal
+                    setParticipants([{ 
+                      id: myUserId, 
+                      name: "You",
+                      percent: 0, exact: 0, shares: 0,
+                      paid: 0, owes: 0, net: 0
+                    }]);
+                    setPayerMode("you");
+                    setSplitMethod("EQUALLY");
+                    setSelectedGroup(null); // Clear group selection for personal expense
+                  }
+                }}
+              />
+              <span className="slider"></span>
+            </label>
+            <span className="toggle-label">
+              {isPersonal ? '👤 Personal expense (just for you)' : '👥 Shared expense'}
+            </span>
+          </div>
+
+          {!isPersonal && (
           <div className="form-section">
             <label className="label">With you</label>
             <div className="multi-input">
@@ -854,6 +886,7 @@ function AddExpenseModal({ onClose, onSave }) {
               </div>
             )}
           </div>
+          )}
 
           {/* Category Picker */}
           <div className="form-section">
@@ -1201,15 +1234,17 @@ function AddExpenseModal({ onClose, onSave }) {
                 className="input modern"
               />
             </div>
-            <div className="form-section">
-              <label className="label">No group</label>
-              <button
-                onClick={() => setShowGroupModal(true)}
-                className="input ghost group-select"
-              >
-                {selectedGroup ? selectedGroup.groupName : "No group"}
-              </button>
-            </div>
+            {!isPersonal && (
+              <div className="form-section">
+                <label className="label">Group</label>
+                <button
+                  onClick={() => setShowGroupModal(true)}
+                  className="input ghost group-select"
+                >
+                  {selectedGroup ? selectedGroup.groupName : "No group"}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="form-section">

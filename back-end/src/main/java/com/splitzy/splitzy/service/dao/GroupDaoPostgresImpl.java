@@ -4,6 +4,7 @@ import com.splitzy.splitzy.entity.GroupSql;
 import com.splitzy.splitzy.repository.sql.GroupSqlRepository;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
  */
 @Repository
 @Profile("postgres")
+@Transactional(readOnly = true)
 public class GroupDaoPostgresImpl implements GroupDao {
 
     private final GroupSqlRepository groupSqlRepository;
@@ -43,6 +45,7 @@ public class GroupDaoPostgresImpl implements GroupDao {
     }
 
     @Override
+    @Transactional
     public GroupDto save(GroupDto groupDto) {
         GroupSql group = toEntity(groupDto);
         GroupSql saved = groupSqlRepository.save(group);
@@ -50,6 +53,7 @@ public class GroupDaoPostgresImpl implements GroupDao {
     }
 
     @Override
+    @Transactional
     public void deleteById(String id) {
         groupSqlRepository.deleteById(id);
     }

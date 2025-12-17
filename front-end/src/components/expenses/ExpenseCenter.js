@@ -71,6 +71,7 @@ function ExpenseCenter({ onOpenChat }) {
       taxRate: expenseData.taxRate,   // now included
       tipRate: expenseData.tipRate,
       fullOwe: expenseData.fullOwe, // now included
+      isPersonal: expenseData.isPersonal || false, // Personal expense flag
     };
 
 

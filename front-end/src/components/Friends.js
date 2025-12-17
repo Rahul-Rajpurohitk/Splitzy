@@ -144,8 +144,8 @@ function Friends() {
     handleCloseUnfriendModal();
   };
 
-  // Show only top 4 friends (for instance)
-  const topFriends = friends.slice(0, 4);
+  // Show all friends (scrollable list)
+  const topFriends = friends;
 
     // NEW: Friend click handler to set the expense filter
   const handleFriendClick = (friend) => {

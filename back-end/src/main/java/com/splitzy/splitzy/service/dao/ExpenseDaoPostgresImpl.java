@@ -8,6 +8,7 @@ import com.splitzy.splitzy.repository.sql.ExpenseSqlRepository;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
  */
 @Repository
 @Profile("postgres")
+@Transactional(readOnly = true)
 public class ExpenseDaoPostgresImpl implements ExpenseDao {
 
     private final ExpenseSqlRepository expenseSqlRepository;
@@ -74,6 +76,7 @@ public class ExpenseDaoPostgresImpl implements ExpenseDao {
     }
 
     @Override
+    @Transactional
     public ExpenseDto save(ExpenseDto expenseDto) {
         ExpenseSql expense = toEntity(expenseDto);
         ExpenseSql saved = expenseSqlRepository.save(expense);
@@ -81,6 +84,7 @@ public class ExpenseDaoPostgresImpl implements ExpenseDao {
     }
 
     @Override
+    @Transactional
     public void deleteById(String id) {
         expenseSqlRepository.deleteById(id);
     }
@@ -103,6 +107,8 @@ public class ExpenseDaoPostgresImpl implements ExpenseDao {
         dto.setUpdatedAt(expense.getUpdatedAt());
         dto.setTaxRate(expense.getTaxRate());
         dto.setTipRate(expense.getTipRate());
+        dto.setPersonal(expense.isPersonal());
+        dto.setSettled(expense.isSettled());
 
         if (expense.getPayers() != null) {
             dto.setPayers(expense.getPayers().stream()
@@ -132,6 +138,8 @@ public class ExpenseDaoPostgresImpl implements ExpenseDao {
         dto.setShare(p.getShare());
         dto.setPaid(p.getPaid());
         dto.setNet(p.getNet());
+        dto.setSettledAmount(p.getSettledAmount());
+        dto.setFullySettled(p.isFullySettled());
         return dto;
     }
 
@@ -161,6 +169,8 @@ public class ExpenseDaoPostgresImpl implements ExpenseDao {
         expense.setUpdatedAt(dto.getUpdatedAt());
         expense.setTaxRate(dto.getTaxRate());
         expense.setTipRate(dto.getTipRate());
+        expense.setPersonal(dto.isPersonal());
+        expense.setSettled(dto.isSettled());
 
         if (dto.getPayers() != null) {
             expense.setPayers(dto.getPayers().stream()
@@ -190,6 +200,8 @@ public class ExpenseDaoPostgresImpl implements ExpenseDao {
         p.setShare(dto.getShare());
         p.setPaid(dto.getPaid());
         p.setNet(dto.getNet());
+        p.setSettledAmount(dto.getSettledAmount());
+        p.setFullySettled(dto.isFullySettled());
         return p;
     }
 

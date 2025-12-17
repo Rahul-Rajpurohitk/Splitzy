@@ -1,13 +1,17 @@
 package com.splitzy.splitzy.model;
 
-import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.AccessLevel;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Document(collection = "expenses")
 public class Expense {
 
@@ -34,4 +38,33 @@ public class Expense {
     private LocalDateTime updatedAt;
     private double taxRate;
     private double tipRate;
+    
+    // Personal expense flag - prevent Lombok from generating getter/setter
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private boolean isPersonal = false;
+    
+    // Settlement status - prevent Lombok from generating getter/setter  
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private boolean isSettled = false;
+    
+    // Manual getters/setters with correct JSON property naming
+    @JsonProperty("isPersonal")
+    public boolean isPersonal() {
+        return isPersonal;
+    }
+    
+    public void setPersonal(boolean personal) {
+        this.isPersonal = personal;
+    }
+    
+    @JsonProperty("isSettled")
+    public boolean isSettled() {
+        return isSettled;
+    }
+    
+    public void setSettled(boolean settled) {
+        this.isSettled = settled;
+    }
 }

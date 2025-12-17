@@ -1,7 +1,11 @@
 import React, { useState } from "react";
-import { useSelector } from "react-redux";
-import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2 } from "react-icons/fi";
+import { useSelector, useDispatch } from "react-redux";
+import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2, FiTrash2, FiCheckCircle, FiX } from "react-icons/fi";
 import ShareExpenseModal from "./ShareExpenseModal";
+import axios from "axios";
+import { fetchExpensesThunk } from "../../features/expense/expenseSlice";
+
+const API_URL = process.env.REACT_APP_API_URL;
 
 // Category icons mapping - matches AddExpenseModal categories
 const CATEGORY_ICONS = {
@@ -67,7 +71,15 @@ const getSplitMethodLabel = (method) => {
 };
 
 function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenChat }) {
+  const dispatch = useDispatch();
+  const token = localStorage.getItem("splitzyToken");
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showSettleModal, setShowSettleModal] = useState(false);
+  const [settleMode, setSettleMode] = useState('full'); // 'full' or 'partial'
+  const [partialAmount, setPartialAmount] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
+  
   const expense = useSelector((state) =>
     state.expense.list.find((e) => e.id === expenseId)
   );
@@ -86,6 +98,55 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
       // Open first thread's chat
       onOpenChat(threads[0]);
     }
+  };
+
+  // Handle delete expense
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+    
+    setIsDeleting(true);
+    try {
+      await axios.delete(`${API_URL}/home/expenses/${expenseId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+    } catch (err) {
+      console.error('Error deleting expense:', err);
+      alert('Failed to delete expense');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Handle settle expense
+  const handleSettle = async () => {
+    setIsSettling(true);
+    try {
+      const payload = {
+        participantUserId: myUserId,
+        settleAmount: settleMode === 'full' ? 0 : parseFloat(partialAmount) || 0,
+        settleFullAmount: settleMode === 'full'
+      };
+      
+      await axios.post(`${API_URL}/home/expenses/${expenseId}/settle`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setShowSettleModal(false);
+      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+    } catch (err) {
+      console.error('Error settling expense:', err);
+      alert('Failed to settle expense');
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
+  // Handle settle full expense (all participants)
+  const handleSettleFull = async (e) => {
+    e.stopPropagation();
+    setShowSettleModal(true);
   };
 
   // Parse date
@@ -150,7 +211,11 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
 
         {/* Center: Description + meta */}
         <div className="expense-center">
-          <h4 className="expense-title">{expense.description}</h4>
+          <h4 className="expense-title">
+            {expense.description}
+            {expense.isPersonal && <span className="personal-badge">👤 Personal</span>}
+            {expense.isSettled && <span className="personal-badge" style={{background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e'}}>✓ Settled</span>}
+          </h4>
           <div className="expense-meta">
             <span className="expense-meta-item">
               <FiDollarSign size={12} />
@@ -256,11 +321,121 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
             </div>
           )}
 
+          {/* Actions */}
+          <div className="expense-actions">
+            {!expense.isSettled && myNet !== 0 && (
+              <button 
+                className="expense-action-btn settle"
+                onClick={handleSettleFull}
+                disabled={isSettling}
+              >
+                <FiCheckCircle size={14} />
+                {isSettling ? 'Settling...' : 'Mark as Paid'}
+              </button>
+            )}
+            {expense.isSettled && (
+              <button className="expense-action-btn settled" disabled>
+                <FiCheckCircle size={14} />
+                Settled
+              </button>
+            )}
+            <button 
+              className="expense-action-btn delete"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              <FiTrash2 size={14} />
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+
           {/* Footer */}
           <div className="expense-footer">
             <span>Created by {expense.creatorName}</span>
             <span>•</span>
             <span>{new Date(expense.createdAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Settle Modal */}
+      {showSettleModal && (
+        <div className="settle-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="settle-modal-content">
+            <div className="settle-modal-header">
+              <h3>Mark as Paid</h3>
+              <button className="settle-modal-close" onClick={() => setShowSettleModal(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            
+            <div className="settle-amount-info">
+              <div className="settle-amount-row">
+                <span>Your share:</span>
+                <span>${Math.abs(myParticipant.share || 0).toFixed(2)}</span>
+              </div>
+              <div className="settle-amount-row">
+                <span>Already settled:</span>
+                <span>${(myParticipant.settledAmount || 0).toFixed(2)}</span>
+              </div>
+              <div className="settle-amount-row">
+                <span>Remaining:</span>
+                <span>${Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0)).toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div className="settle-options">
+              <label 
+                className={`settle-option ${settleMode === 'full' ? 'active' : ''}`}
+                onClick={() => setSettleMode('full')}
+              >
+                <input 
+                  type="radio" 
+                  name="settleMode" 
+                  checked={settleMode === 'full'} 
+                  onChange={() => setSettleMode('full')}
+                />
+                <span>Settle full remaining amount</span>
+              </label>
+              <label 
+                className={`settle-option ${settleMode === 'partial' ? 'active' : ''}`}
+                onClick={() => setSettleMode('partial')}
+              >
+                <input 
+                  type="radio" 
+                  name="settleMode" 
+                  checked={settleMode === 'partial'} 
+                  onChange={() => setSettleMode('partial')}
+                />
+                <span>Settle partial amount</span>
+              </label>
+              {settleMode === 'partial' && (
+                <div className="settle-partial-input">
+                  <input
+                    type="number"
+                    placeholder="Enter amount to settle"
+                    value={partialAmount}
+                    onChange={(e) => setPartialAmount(e.target.value)}
+                    step="0.01"
+                    min="0"
+                    max={Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0))}
+                  />
+                </div>
+              )}
+            </div>
+            
+            <div className="settle-modal-actions">
+              <button className="settle-cancel-btn" onClick={() => setShowSettleModal(false)}>
+                Cancel
+              </button>
+              <button 
+                className="settle-confirm-btn" 
+                onClick={handleSettle}
+                disabled={isSettling || (settleMode === 'partial' && (!partialAmount || parseFloat(partialAmount) <= 0))}
+              >
+                {isSettling ? 'Processing...' : 'Confirm Payment'}
+              </button>
+            </div>
           </div>
         </div>
       )}
