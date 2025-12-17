@@ -1,17 +1,13 @@
 package com.splitzy.splitzy.util;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
-import java.util.Date;
-
-
 import java.util.Date;
 
 @Component
@@ -23,7 +19,7 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long expiration; // e.g., 36000000 (10 hours in ms)
 
-    private Key SECRET_KEY;
+    private SecretKey SECRET_KEY;
 
     @PostConstruct
     public void init() {
@@ -32,21 +28,20 @@ public class JwtUtil {
     }
 
     public String generateToken(String username) {
-
         return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration)) // e.g. 10 hours
-                .signWith(SECRET_KEY, SignatureAlgorithm.HS256)
+                .subject(username)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expiration)) // e.g. 10 hours
+                .signWith(SECRET_KEY)
                 .compact();
     }
 
     public String extractUsername(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(SECRET_KEY)
+        return Jwts.parser()
+                .verifyWith(SECRET_KEY)
                 .build()
-                .parseClaimsJws(token)
-                .getBody()
+                .parseSignedClaims(token)
+                .getPayload()
                 .getSubject();
     }
 
@@ -56,11 +51,11 @@ public class JwtUtil {
     }
 
     private boolean isTokenExpired(String token) {
-        Date expirationDate = Jwts.parserBuilder()
-                .setSigningKey(SECRET_KEY)
+        Date expirationDate = Jwts.parser()
+                .verifyWith(SECRET_KEY)
                 .build()
-                .parseClaimsJws(token)
-                .getBody()
+                .parseSignedClaims(token)
+                .getPayload()
                 .getExpiration();
         return expirationDate.before(new Date());
     }

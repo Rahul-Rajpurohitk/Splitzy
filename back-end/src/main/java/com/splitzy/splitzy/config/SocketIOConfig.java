@@ -25,10 +25,23 @@ public class SocketIOConfig {
 
         server = new SocketIOServer(config);
 
-        // On connect: extract the token, validate, and join a room by email
+        // On connect: extract the token from query param or auth object, validate, and join a room by email
         server.addConnectListener(client -> {
+            // Try query param first (socket.io 2.x style), then auth object (socket.io 4.x style)
             String token = client.getHandshakeData().getSingleUrlParam("token");
-            if (token != null) {
+            if (token == null || token.isBlank()) {
+                // Try to get from auth object (socket.io-client 4.x sends auth data this way)
+                Object authToken = client.getHandshakeData().getAuthToken();
+                if (authToken instanceof java.util.Map) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> authMap = (java.util.Map<String, Object>) authToken;
+                    Object tokenObj = authMap.get("token");
+                    if (tokenObj != null) {
+                        token = tokenObj.toString();
+                    }
+                }
+            }
+            if (token != null && !token.isBlank()) {
                 try {
                     String email = jwtUtil.extractUsername(token);
                     client.joinRoom(email);

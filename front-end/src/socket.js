@@ -1,21 +1,33 @@
 // src/socket.js
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 
-const token = localStorage.getItem('splitzyToken');
-const socket = io("http://localhost:9092", {
+const getSocket = () => {
+  const token = localStorage.getItem('splitzyToken');
+  return io("http://localhost:9092", {
     withCredentials: true,
-    // If you're using cookies for authentication, you wouldn't need query params
-    // But if you're combining them, you can do both:
-    query: { token }
+    // socket.io-client 4.x uses 'auth' for token-based authentication
+    auth: { token },
+    // Fallback query for backward compatibility
+    query: { token },
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
   });
-  
+};
+
+const socket = getSocket();
 
 socket.on("connect", () => {
   console.log("Socket.IO connected, id:", socket.id);
 });
 
-socket.on("disconnect", () => {
-  console.log("Socket.IO disconnected");
+socket.on("disconnect", (reason) => {
+  console.log("Socket.IO disconnected:", reason);
+});
+
+socket.on("connect_error", (error) => {
+  console.log("Socket.IO connection error:", error.message);
 });
 
 /* Listen for friend request events
