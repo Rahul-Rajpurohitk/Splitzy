@@ -6,9 +6,10 @@ import com.splitzy.splitzy.dto.GroupMemberDTO;
 import com.splitzy.splitzy.model.Group;
 import com.splitzy.splitzy.model.GroupMember;
 import com.splitzy.splitzy.model.Notification;
-import com.splitzy.splitzy.repository.GroupRepository;
-import com.splitzy.splitzy.repository.UserRepository;
-import com.splitzy.splitzy.service.NotificationService;
+import com.splitzy.splitzy.service.dao.GroupDao;
+import com.splitzy.splitzy.service.dao.GroupDto;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import com.corundumstudio.socketio.SocketIOServer;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,35 +27,37 @@ public class GroupServiceImpl implements GroupService {
 
     private static final Logger logger = LoggerFactory.getLogger(GroupServiceImpl.class);
 
-    private final GroupRepository groupRepository;
-    private final UserRepository userRepository;
+    private final GroupDao groupDao;
+    private final UserDao userDao;
     private final NotificationService notificationService;
     private final SocketIOServer socketIOServer;
 
     @Override
     public GroupDTO createGroup(GroupDTO groupDTO) {
         logger.info("Creating group with name '{}' for creatorId: {}", groupDTO.getGroupName(), groupDTO.getCreatorId());
-        // Convert DTO to domain entity with creator's id and name.
-        Group group = Group.builder()
-                .groupName(groupDTO.getGroupName())
-                .creatorId(groupDTO.getCreatorId())
-                .creatorName(groupDTO.getCreatorName())
-                .groupType(groupDTO.getGroupType())
-                .createdAt(LocalDateTime.now())
-                .friends(groupDTO.getFriends() != null ?
-                        groupDTO.getFriends().stream()
-                                .map(this::convertToGroupMember)
-                                .collect(Collectors.toList()) : null)
-                .build();
+        
+        // Convert DTO to internal GroupDto with creator's id and name.
+        GroupDto groupDtoInternal = new GroupDto();
+        groupDtoInternal.setGroupName(groupDTO.getGroupName());
+        groupDtoInternal.setCreatorId(groupDTO.getCreatorId());
+        groupDtoInternal.setCreatorName(groupDTO.getCreatorName());
+        groupDtoInternal.setGroupType(groupDTO.getGroupType());
+        groupDtoInternal.setCreatedAt(LocalDateTime.now());
+        
+        if (groupDTO.getFriends() != null) {
+            groupDtoInternal.setFriends(groupDTO.getFriends().stream()
+                    .map(f -> new GroupDto.GroupMemberDto(f.getId(), f.getUsername(), f.getEmail()))
+                    .collect(Collectors.toList()));
+        }
 
-        // Save group in MongoDB.
-        Group savedGroup = groupRepository.save(group);
+        // Save group via DAO
+        GroupDto savedGroup = groupDao.save(groupDtoInternal);
         logger.info("Group saved with id: {} and name: '{}'", savedGroup.getId(), savedGroup.getGroupName());
 
         // Update the creator's User document to add this group id.
-        userRepository.findById(groupDTO.getCreatorId()).ifPresent(user -> {
+        userDao.findById(groupDTO.getCreatorId()).ifPresent(user -> {
             user.getGroupIds().add(savedGroup.getId());
-            userRepository.save(user);
+            userDao.save(user);
             logger.debug("Updated creator (id: {}) document with new group id: {}", groupDTO.getCreatorId(), savedGroup.getId());
         });
 
@@ -63,9 +67,9 @@ public class GroupServiceImpl implements GroupService {
             groupDTO.getFriends().forEach(friendDto -> {
                 // Process only if the friend id is provided.
                 if (friendDto.getId() != null && !friendDto.getId().isEmpty()) {
-                    userRepository.findById(friendDto.getId()).ifPresent(friend -> {
+                    userDao.findById(friendDto.getId()).ifPresent(friend -> {
                         friend.getGroupIds().add(savedGroup.getId());
-                        userRepository.save(friend);
+                        userDao.save(friend);
                         logger.debug("Updated friend (id: {}) document with new group id: {}", friendDto.getId(), savedGroup.getId());
 
                         // Create a notification with message like "creatorName added you in a group."
@@ -101,13 +105,16 @@ public class GroupServiceImpl implements GroupService {
             });
         }
         logger.info("Group creation completed for group id: {}", savedGroup.getId());
+        
+        // Update the return DTO with the saved id
+        groupDTO.setId(savedGroup.getId());
         return groupDTO;
     }
 
     @Override
     public List<GroupDTO> getGroupsForUser(String userId) {
         logger.info("Fetching groups for userId: {}", userId);
-        List<Group> groups = groupRepository.findByCreatorIdOrFriendsId(userId);
+        List<GroupDto> groups = groupDao.findByCreatorIdOrMemberId(userId);
         logger.info("Found {} groups for userId: {}", groups.size(), userId);
 
         return groups.stream()
@@ -115,26 +122,10 @@ public class GroupServiceImpl implements GroupService {
                     GroupDTO dto = new GroupDTO();
                     dto.setId(group.getId());
                     dto.setGroupName(group.getGroupName());
+                    dto.setGroupType(group.getGroupType());
                     // skip setting other fields
                     return dto;
                 })
                 .collect(Collectors.toList());
-    }
-
-
-
-
-
-    private GroupMember convertToGroupMember(GroupMemberDTO dto) {
-        return new GroupMember(dto.getId(), dto.getUsername(), dto.getEmail());
-    }
-
-    private GroupDTO convertToGroupDTO(Group group) {
-        List<GroupMemberDTO> memberDTOs = group.getFriends() != null
-                ? group.getFriends().stream()
-                .map(member -> new GroupMemberDTO(member.getId(), member.getUsername(), member.getEmail()))
-                .collect(Collectors.toList())
-                : null;
-        return new GroupDTO(group.getGroupName(), group.getCreatorId(), group.getCreatorName(), memberDTOs, group.getGroupType());
     }
 }

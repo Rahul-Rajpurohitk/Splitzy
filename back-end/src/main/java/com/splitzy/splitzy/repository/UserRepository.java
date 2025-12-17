@@ -1,4 +1,6 @@
 package com.splitzy.splitzy.repository;
+
+import org.springframework.context.annotation.Profile;
 import com.splitzy.splitzy.model.User;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
@@ -9,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 
 @Repository
+@Profile("!postgres")
 public interface UserRepository extends MongoRepository<User, String> {
     Optional<User> findByEmail(String email);
     // Spring Data gives you standard CRUD methods automatically

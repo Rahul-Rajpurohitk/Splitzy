@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback} from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
 import '../notification.css';
@@ -7,9 +7,78 @@ import { FiBell } from 'react-icons/fi';
 function Notification() {
   const [notifications, setNotifications] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const wrapperRef = useRef(null);
 
   const userId = localStorage.getItem('myUserId');
   const token = localStorage.getItem('splitzyToken');
+
+  // Reference to current notifications for use in event handlers
+  const notificationsRef = useRef(notifications);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+
+  // Helper to mark non-action notifications as read (everything except FRIEND_REQUEST)
+  const markInfoNotificationsAsRead = useCallback(async () => {
+    const currentNotifications = notificationsRef.current;
+    
+    // Mark ALL notifications that are NOT friend requests
+    const infoNotifications = currentNotifications.filter(n => 
+      n.type !== "FRIEND_REQUEST"
+    );
+    
+    console.log("[Notification] Total notifications:", currentNotifications.length);
+    console.log("[Notification] Types:", currentNotifications.map(n => n.type));
+    console.log("[Notification] To mark as read:", infoNotifications.length);
+    
+    if (infoNotifications.length === 0) {
+      console.log("[Notification] All notifications are FRIEND_REQUEST - require action");
+      return;
+    }
+    
+    const ids = infoNotifications.map(n => n.id);
+    
+    try {
+      // Try bulk endpoint first
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/notifications/mark-read-bulk`,
+        ids,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      console.log("[Notification] Bulk mark success");
+    } catch (err) {
+      console.warn("[Notification] Bulk failed, trying individual marks");
+      // Fallback: mark individually
+      for (const id of ids) {
+        try {
+          await axios.patch(
+            `${process.env.REACT_APP_API_URL}/notifications/${id}/read`,
+            null,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch (e) {
+          console.error("[Notification] Failed to mark:", id, e);
+        }
+      }
+    }
+    
+    // Remove non-FRIEND_REQUEST notifications from state
+    setNotifications(prev => prev.filter(n => n.type === "FRIEND_REQUEST"));
+    console.log("[Notification] Removed from state, remaining:", 
+      currentNotifications.filter(n => n.type === "FRIEND_REQUEST").length);
+  }, [token]);
+
+  // Close dropdown when modals open
+  useEffect(() => {
+    const handleModalOpen = () => {
+      if (showDropdown) {
+        markInfoNotificationsAsRead();
+        setShowDropdown(false);
+      }
+    };
+    window.addEventListener('modalOpened', handleModalOpen);
+    return () => window.removeEventListener('modalOpened', handleModalOpen);
+  }, [showDropdown, markInfoNotificationsAsRead]);
 
   // 1) Read lastEvent from Redux  
   const lastEvent = useSelector((state) => state.socket.lastEvent);
@@ -68,8 +137,12 @@ function Notification() {
   
   
 
-  // Toggle the dropdown
+  // Toggle the dropdown - mark info notifications as read when closing
   const handleToggleDropdown = () => {
+    if (showDropdown) {
+      // Dropdown is closing - mark regular notifications as read
+      markInfoNotificationsAsRead();
+    }
     setShowDropdown(!showDropdown);
   };
 
@@ -126,18 +199,18 @@ function Notification() {
       }
     }, [token]);
 
+  // Close dropdown and mark as read when clicking outside
   useEffect(() => {
-    // When the dropdown closes, mark expense and group invite notifications as read.
-    if (!showDropdown) {
-      // Filter notifications that should be auto-marked as read (e.g., EXPENSE and GROUP_INVITE)
-      const autoMarkList = notifications.filter(n => 
-        n.type === "EXPENSE" || n.type === "GROUP_INVITE"
-      );
-      autoMarkList.forEach(n => {
-        markNotificationAsRead(n.id);
-      });
-    }
-  }, [showDropdown, notifications, markNotificationAsRead]);
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target) && showDropdown) {
+        markInfoNotificationsAsRead();
+        setShowDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDropdown, markInfoNotificationsAsRead]);
   
   
   
@@ -150,17 +223,18 @@ function Notification() {
   ].join(" ").trim();
 
   return (
-    <div className="notif-wrapper">
-      <button className={bellClasses} onClick={handleToggleDropdown}>
+    <div className="notif-wrapper" ref={wrapperRef}>
+      <button className={`nav-icon-pill ${bellClasses}`} onClick={handleToggleDropdown} title="Notifications">
         <FiBell className="notif-icon" aria-hidden="true" />
-        {unreadCount > 0 && <span className="notif-dot">{unreadCount}</span>}
+        <span className="nav-icon-text">Notifications</span>
       </button>
+      {unreadCount > 0 && <span className="notif-dot">{unreadCount}</span>}
 
       {showDropdown && (
         <div className="notif-dropdown glass-card">
           <div className="notif-header">
             <span>Notifications</span>
-            <button className="chip ghost" onClick={() => setShowDropdown(false)}>Close</button>
+            <button className="chip ghost" onClick={handleToggleDropdown}>Close</button>
           </div>
           <div className="panel-divider soft" />
 
@@ -171,38 +245,29 @@ function Notification() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`notif-item ${n.type === "EXPENSE" || n.type === "GROUP_INVITE" ? "notif-info" : "notif-action"}`}
+              className={`notif-item ${n.type === "FRIEND_REQUEST" ? "notif-action" : "notif-info"}`}
             >
-              {n.type === "EXPENSE" || n.type === "GROUP_INVITE" ? (
-                <div
-                  className="notif-message"
-                  onClick={() => markNotificationAsRead(n.id)}
-                >
-                  <span className="notif-title">{n.senderName}</span>
-                  <span className="notif-sub">
-                    {n.type === "GROUP_INVITE"
-                      ? "invited you to a group."
-                      : "added you to an expense."}
-                  </span>
-                </div>
-              ) : (
-                <div className="notif-message">
-                  <span className="notif-title">{n.senderName}</span>
-                  <span className="notif-sub">sent you a friend request.</span>
-                  <div className="notif-actions">
-                    <button
-                      className="chip primary"
-                      onClick={() => handleAccept(n.referenceId)}
-                    >
-                      Accept
-                    </button>
-                    <button
-                      className="chip ghost"
-                      onClick={() => handleReject(n.referenceId)}
-                    >
-                      Reject
-                    </button>
-                  </div>
+              <div className="notif-message" onClick={() => n.type !== "FRIEND_REQUEST" && markNotificationAsRead(n.id)}>
+                <span className="notif-title">{n.senderName}</span>
+                <span className="notif-sub">
+                  {n.type === "GROUP_INVITE"
+                    ? "invited you to a group."
+                    : n.type === "EXPENSE"
+                    ? "added you to an expense."
+                    : n.type === "FRIEND_REQUEST"
+                    ? "sent you a friend request."
+                    : n.message || "New notification"}
+                </span>
+              </div>
+              {/* Friend requests require action - show Accept/Reject buttons */}
+              {n.type === "FRIEND_REQUEST" && (
+                <div className="notif-actions">
+                  <button className="chip primary" onClick={() => handleAccept(n.referenceId)}>
+                    Accept
+                  </button>
+                  <button className="chip ghost" onClick={() => handleReject(n.referenceId)}>
+                    Reject
+                  </button>
                 </div>
               )}
             </div>

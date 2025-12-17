@@ -14,7 +14,7 @@ import {
 
 import ExpenseList from "./ExpenseList";
 
-function ExpenseCenter() {
+function ExpenseCenter({ onOpenChat }) {
   const dispatch = useDispatch();
   const [showModal, setShowModal] = useState(false);
 
@@ -58,19 +58,20 @@ function ExpenseCenter() {
     const payload = { 
       creatorId: myUserId,
       description: expenseData.description,
+      category: expenseData.category || "general",
       date: expenseData.date || new Date().toISOString().slice(0, 10),
       notes: expenseData.notes || "",
       groupId: expenseData.group ? expenseData.group.id : null,
       groupName: expenseData.group ? expenseData.group.groupName : "",  
       splitMethod: expenseData.splitMethod,
       totalAmount: expenseData.amount || 0,
-      //participantIds: expenseData.participants.map((p) => p.userId),
       payers: expenseData.payerInfo.payers,
       participants: expenseData.participants, // the single array
       items: [],
       taxRate: expenseData.taxRate,   // now included
       tipRate: expenseData.tipRate,
       fullOwe: expenseData.fullOwe, // now included
+      isPersonal: expenseData.isPersonal || false, // Personal expense flag
     };
 
 
@@ -139,7 +140,10 @@ function ExpenseCenter() {
               Reset view
             </button>
           )}
-          <button className="chip primary" onClick={() => setShowModal(true)}>
+          <button className="chip primary" onClick={() => {
+            window.dispatchEvent(new CustomEvent('modalOpened'));
+            setShowModal(true);
+          }}>
             + Add expense
           </button>
         </div>
@@ -151,7 +155,7 @@ function ExpenseCenter() {
 
       {/* We pass myUserId so children can do "You owe / You lent" logic if needed */}
       {/* The child will do its own useSelector to get the expense list */}
-      {status === "succeeded" && <ExpenseList myUserId={myUserId} />}
+      {status === "succeeded" && <ExpenseList myUserId={myUserId} onOpenChat={onOpenChat} />}
 
       {showModal && (
         <AddExpenseModal onClose={() => setShowModal(false)} onSave={handleSaveExpense} />

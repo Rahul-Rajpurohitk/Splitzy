@@ -28,7 +28,7 @@ public class SecurityConfig {
                 .cors(withDefaults())         // <--- This line ensures your CorsConfig is used
                 .csrf(AbstractHttpConfigurer::disable) // Updated API for disabling CSRF
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/login", "/auth/signup", "/auth/verify-email", "/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers("/auth/login", "/auth/signup", "/auth/verify-email", "/auth/test-signup", "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )

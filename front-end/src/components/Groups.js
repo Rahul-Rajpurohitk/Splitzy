@@ -54,22 +54,23 @@ const Groups = () => {
     <div className="panel slim-card">
       <div className="panel-header">
         <span>Groups</span>
-        <button className="chip ghost" onClick={() => setShowModal(true)}>+ Add</button>
+        <button className="chip ghost" onClick={() => {
+          window.dispatchEvent(new CustomEvent('modalOpened'));
+          setShowModal(true);
+        }}>+ Add</button>
       </div>
       <div className="panel-divider" />
-      <ul className="list-stack">
+      <ul className="list-stack compact">
         {groups.length ? (
           groups.map((group) => (
             <li
               key={group.id}
-              className="list-tile"
+              className="list-row"
               onClick={() => handleGroupClick(group)}
             >
-              <div className="avatar-mini">{group.groupName?.[0] || "G"}</div>
-              <div className="tile-body">
-                <span className="tile-title">{group.groupName}</span>
-                <span className="tile-sub">{group.groupType || "Group"}</span>
-              </div>
+              <div className="avatar-sm">{group.groupName?.[0] || "G"}</div>
+              <span className="row-name">{group.groupName}</span>
+              <span className="row-tag">{group.groupType || "Group"}</span>
             </li>
           ))
         ) : (

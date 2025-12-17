@@ -2,7 +2,8 @@ package com.splitzy.splitzy.service;
 
 import com.splitzy.splitzy.model.RedisUser;
 import com.splitzy.splitzy.model.User;
-import com.splitzy.splitzy.repository.UserRepository;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.HashSet;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -20,7 +22,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     private static final Logger logger = LoggerFactory.getLogger(CustomUserDetailsService.class);
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -30,25 +32,25 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(username)
+        UserDto userDto = userDao.findByEmail(username)
                 .orElseThrow(() -> {
                     logger.error("User not found for email: {}", username);
                     return new UsernameNotFoundException("User not found");
                 });
 
         logger.info("User loaded successfully for email: {}", username);
-        logger.info("Password from database for user {}: {}", username, user.getPassword());
+        logger.info("Password from database for user {}: {}", username, userDto.getPassword());
         return new org.springframework.security.core.userdetails.User(
-                user.getEmail(),
-                user.getPassword(),
+                userDto.getEmail(),
+                userDto.getPassword(),
                 Collections.emptyList() // Add authorities if needed
         );
     }
 
     public boolean userExists(String email) {
         logger.info("Checking if user exists with email: {}", email);
-        // Check permanent database
-        boolean existsInDatabase = userRepository.findByEmail(email).isPresent();
+        // Check permanent database via DAO
+        boolean existsInDatabase = userDao.findByEmail(email).isPresent();
         if (existsInDatabase) {
             logger.info("User with email: {} already exists in the database", email);
             return true;
@@ -68,10 +70,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     public User findByVerificationToken(String token) {
-        return userRepository.findByVerificationToken(token)
-                .orElse(null); // Return null if no user is found
+        return userDao.findByVerificationToken(token)
+                .map(this::toUser)
+                .orElse(null);
     }
-
 
     public User save(User user) {
         logger.info("Saving user with email: {}", user.getEmail());
@@ -80,12 +82,44 @@ public class CustomUserDetailsService implements UserDetailsService {
             if (!user.getPassword().startsWith("$2a$")) { // BCrypt hashes start with "$2a$"
                 user.setPassword(passwordEncoder.encode(user.getPassword()));
             }
-            User savedUser = userRepository.save(user);
+            UserDto dto = toDto(user);
+            UserDto savedDto = userDao.save(dto);
+            User savedUser = toUser(savedDto);
             logger.info("User saved successfully with email: {}", savedUser.getEmail());
             return savedUser;
         } catch (Exception e) {
             logger.error("Error saving user with email: {}", user.getEmail(), e);
             throw e;
         }
+    }
+
+    // --- Conversion helpers ---
+
+    private UserDto toDto(User user) {
+        return new UserDto(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getPassword(),
+                user.getVerificationToken(),
+                user.isVerified(),
+                user.getAvatarUrl(),
+                user.getFriendIds() != null ? user.getFriendIds() : new HashSet<>(),
+                user.getGroupIds() != null ? user.getGroupIds() : new HashSet<>()
+        );
+    }
+
+    private User toUser(UserDto dto) {
+        User user = new User();
+        user.setId(dto.getId());
+        user.setName(dto.getName());
+        user.setEmail(dto.getEmail());
+        user.setPassword(dto.getPassword());
+        user.setVerificationToken(dto.getVerificationToken());
+        user.setVerified(dto.isVerified());
+        user.setAvatarUrl(dto.getAvatarUrl());
+        user.setFriendIds(dto.getFriendIds() != null ? dto.getFriendIds() : new HashSet<>());
+        user.setGroupIds(dto.getGroupIds() != null ? dto.getGroupIds() : new HashSet<>());
+        return user;
     }
 }

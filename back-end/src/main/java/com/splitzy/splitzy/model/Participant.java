@@ -15,4 +15,8 @@ public class Participant {
     private double share;    // how much this user owes
     private double paid;
     private double net;
+    
+    // Settlement tracking
+    private double settledAmount = 0;  // Amount already settled/paid
+    private boolean fullySettled = false;  // Whether fully settled
 }

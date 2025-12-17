@@ -31,10 +31,10 @@ const FriendSearchInput = ({ value, onChange, placeholder }) => {
   }, [value, currentUserId, token]);
 
   return (
-    <div className="relative">
+    <div className="friend-search-wrapper">
       <input
         type="text"
-        value={value}
+        value={typeof value === 'object' ? value.name || '' : value}
         onChange={(e) => {
           onChange(e.target.value);
           setShowSuggestions(true);
@@ -43,17 +43,18 @@ const FriendSearchInput = ({ value, onChange, placeholder }) => {
         className="input modern"
       />
       {showSuggestions && suggestions.length > 0 && (
-        <ul className="dropdown-list soft absolute z-20 w-full mt-1">
+        <ul className="friend-search-dropdown">
           {suggestions.map((user) => (
             <li
                 key={user.id}
-                className="dropdown-item"
+                className="friend-search-item"
                 onClick={() => {
-                onChange(user); // Return the full user object
+                onChange(user);
                 setShowSuggestions(false);
                 }}
             >
-                {user.name}
+                <span className="avatar-sm">{user.name?.[0] || "U"}</span>
+                <span>{user.name}</span>
             </li>
           ))}
         </ul>
@@ -113,10 +114,23 @@ const AddGroupModal = ({ onClose, onSave }) => {
         };
       } else {
         // If a string is received (manual typing), update the username.
-        newInputs[index] = { 
-          ...newInputs[index], 
-          username: value 
-        };
+        // If the name is cleared or changed, also clear id and email (auto-filled data)
+        const currentInput = newInputs[index];
+        const wasAutoFilled = currentInput.id && currentInput.id !== creatorId;
+        
+        if (wasAutoFilled && value !== currentInput.username) {
+          // Name changed from auto-filled value, clear everything
+          newInputs[index] = { 
+            id: '', 
+            username: value,
+            email: ''
+          };
+        } else {
+          newInputs[index] = { 
+            ...newInputs[index], 
+            username: value 
+          };
+        }
       }
     }
     

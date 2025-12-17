@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useSelector } from "react-redux";
 import MonthSection from "./MonthSection";
 
-function ExpenseList({ myUserId }) {
+function ExpenseList({ myUserId, onOpenChat }) {
   const [expandedExpenseId, setExpandedExpenseId] = useState(null);
   const expenses = useSelector((state) => state.expense.list);
 
@@ -18,7 +18,7 @@ function ExpenseList({ myUserId }) {
     return acc;
   }, {});
 
-  // Sort group keys descending
+  // Sort group keys descending (newest first)
   const sortedGroupKeys = Object.keys(groupedExpenses).sort((a, b) => {
     const [monthA, yearA] = a.split(" ");
     const [monthB, yearB] = b.split(" ");
@@ -31,8 +31,18 @@ function ExpenseList({ myUserId }) {
     setExpandedExpenseId((prev) => (prev === expenseId ? null : expenseId));
   };
 
+  if (expenses.length === 0) {
+    return (
+      <div className="expense-empty">
+        <div className="empty-icon">📊</div>
+        <h3>No expenses yet</h3>
+        <p>Add your first expense to start tracking</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-md mx-auto">
+    <div className="expense-list">
       {sortedGroupKeys.map((groupKey) => (
         <MonthSection
           key={groupKey}
@@ -41,6 +51,7 @@ function ExpenseList({ myUserId }) {
           expandedExpenseId={expandedExpenseId}
           onToggleExpand={handleToggleExpand}
           myUserId={myUserId}
+          onOpenChat={onOpenChat}
         />
       ))}
     </div>

@@ -8,6 +8,7 @@ import java.util.Map;
 @Data
 public class CreateExpenseRequest {
     private String description;
+    private String category;    // expense category (e.g., "food", "transport", "entertainment")
     private double totalAmount; // optional if you want the sum of payers to match
     private LocalDate date;
     private String notes;
@@ -34,6 +35,9 @@ public class CreateExpenseRequest {
     private double tipRate;
 
     private String fullOwe;
+    
+    // Personal expense flag - not shared with others
+    private boolean isPersonal = false;
 
 
     /*

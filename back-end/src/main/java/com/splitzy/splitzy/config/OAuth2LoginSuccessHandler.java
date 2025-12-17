@@ -1,7 +1,7 @@
 package com.splitzy.splitzy.config;
 
-import com.splitzy.splitzy.model.User;
-import com.splitzy.splitzy.repository.UserRepository;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import com.splitzy.splitzy.util.JwtUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,13 +14,14 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Optional;
 
 @Component
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -37,22 +38,24 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String name = oauth2User.getAttribute("name");
         
         // Check if user exists
-        Optional<User> userOptional = userRepository.findByEmail(email);
+        Optional<UserDto> userOptional = userDao.findByEmail(email);
         
         if (userOptional.isEmpty()) {
             // Create new user
-            User newUser = new User();
+            UserDto newUser = new UserDto();
             newUser.setEmail(email);
             newUser.setName(name);
             newUser.setVerified(true);
             newUser.setPassword(""); // No password for OAuth users
-            userRepository.save(newUser);
+            newUser.setFriendIds(new HashSet<>());
+            newUser.setGroupIds(new HashSet<>());
+            userDao.save(newUser);
         } else {
             // Ensure existing user is marked verified if they login via Google
-            User existingUser = userOptional.get();
+            UserDto existingUser = userOptional.get();
             if (!existingUser.isVerified()) {
                 existingUser.setVerified(true);
-                userRepository.save(existingUser);
+                userDao.save(existingUser);
             }
         }
         
@@ -63,4 +66,3 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         response.sendRedirect(frontendUrl + "/oauth2/redirect?token=" + token);
     }
 }
-

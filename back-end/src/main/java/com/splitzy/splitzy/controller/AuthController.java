@@ -2,13 +2,15 @@ package com.splitzy.splitzy.controller;
 
 import com.splitzy.splitzy.model.RedisUser;
 import com.splitzy.splitzy.model.User;
-import com.splitzy.splitzy.repository.UserRepository;
 import com.splitzy.splitzy.service.CustomUserDetailsService;
 import com.splitzy.splitzy.service.EmailService;
 import com.splitzy.splitzy.service.RedisCacheService;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import com.splitzy.splitzy.util.JwtUtil;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -24,12 +26,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
+
+    @Value("${spring.profiles.active:default}")
+    private String activeProfile;
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private static final Pattern STRONG_PASSWORD = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).{8,}$");
@@ -47,7 +53,7 @@ public class AuthController {
     private EmailService emailService;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
     private RedisCacheService redisCacheService;
@@ -61,7 +67,7 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            User userFromDatabase = userRepository.findByEmail(user.getEmail())
+            UserDto userFromDatabase = userDao.findByEmail(user.getEmail())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
             // Authenticate
@@ -78,8 +84,7 @@ public class AuthController {
             response.put("id", userFromDatabase.getId());
             response.put("name", userFromDatabase.getName());
             response.put("email", userFromDatabase.getEmail());
-
-            response.put("friendIds",userFromDatabase.getFriendIds());
+            response.put("friendIds", userFromDatabase.getFriendIds());
 
             return ResponseEntity.ok(response);
 
@@ -194,7 +199,7 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
         String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
+        UserDto user = userDao.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         Map<String, Object> response = new HashMap<>();
@@ -204,6 +209,52 @@ public class AuthController {
         response.put("friendIds", user.getFriendIds());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Test-only endpoint to create users without email verification.
+     * Only available in non-production profiles.
+     */
+    @PostMapping("/test-signup")
+    public ResponseEntity<Map<String, Object>> testSignup(@RequestBody User user) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Block in production
+        if ("prod".equalsIgnoreCase(activeProfile) || "production".equalsIgnoreCase(activeProfile)) {
+            response.put("error", "This endpoint is not available in production");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+        
+        logger.info("Test signup request for email: {}", user.getEmail());
+        
+        try {
+            // Check if user already exists
+            if (userDetailsService.userExists(user.getEmail())) {
+                response.put("error", "User already exists");
+                return ResponseEntity.ok(response);
+            }
+            
+            // Create user directly without email verification
+            User newUser = new User();
+            newUser.setName(user.getName());
+            newUser.setEmail(user.getEmail());
+            newUser.setPassword(user.getPassword()); // Will be encoded by save()
+            newUser.setVerified(true);
+            newUser.setFriendIds(new HashSet<>());
+            
+            userDetailsService.save(newUser);
+            
+            logger.info("Test user created: {}", user.getEmail());
+            response.put("message", "User created successfully");
+            response.put("email", user.getEmail());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Test signup failed for email: {}", user.getEmail(), e);
+            response.put("error", "Failed to create user: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
 }

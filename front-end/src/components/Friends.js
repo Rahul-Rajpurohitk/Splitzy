@@ -144,8 +144,8 @@ function Friends() {
     handleCloseUnfriendModal();
   };
 
-  // Show only top 4 friends (for instance)
-  const topFriends = friends.slice(0, 4);
+  // Show all friends (scrollable list)
+  const topFriends = friends;
 
     // NEW: Friend click handler to set the expense filter
   const handleFriendClick = (friend) => {
@@ -157,20 +157,20 @@ function Friends() {
     <div className="panel slim-card">
       <div className="panel-header">
         <span>Friends</span>
-        <button className="chip ghost" onClick={() => setShowAddModal(true)}>+ Add</button>
+        <button className="chip ghost" onClick={() => {
+          window.dispatchEvent(new CustomEvent('modalOpened'));
+          setShowAddModal(true);
+        }}>+ Add</button>
       </div>
       <div className="panel-divider" />
-      <ul className="list-stack">
+      <ul className="list-stack compact">
         {topFriends.length > 0 ? (
           topFriends.map((friend) => (
-            <li key={friend.id} className="list-tile" onClick={() => handleFriendClick(friend)}>
-              <div className="avatar-mini">{friend.name?.[0] || "F"}</div>
-              <div className="tile-body">
-                <span className="tile-title">{friend.name}</span>
-                <span className="tile-sub">Tap to filter expenses</span>
-              </div>
+            <li key={friend.id} className="list-row" onClick={() => handleFriendClick(friend)}>
+              <div className="avatar-sm">{friend.name?.[0] || "F"}</div>
+              <span className="row-name">{friend.name}</span>
               <button
-                className="tile-action"
+                className="row-action"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleOpenUnfriendModal(friend);
@@ -233,7 +233,7 @@ function Friends() {
         document.body
       )}
 
-      {showUnfriendModal && selectedFriend && (
+      {showUnfriendModal && selectedFriend && createPortal(
         <div className="modal-overlay">
           <div className="glass-card modal-content-sm">
             <div className="modal-header">
@@ -248,7 +248,8 @@ function Friends() {
               <button className="chip danger" onClick={handleConfirmUnfriend}>Confirm</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

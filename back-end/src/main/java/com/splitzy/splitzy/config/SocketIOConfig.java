@@ -1,8 +1,7 @@
 package com.splitzy.splitzy.config;
 
-//import com.corundumstudio.socketio.Configuration;
 import com.corundumstudio.socketio.SocketIOServer;
-import com.corundumstudio.socketio.listener.DataListener;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.splitzy.splitzy.util.JwtUtil;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -48,21 +47,36 @@ public class SocketIOConfig {
                 System.out.println("Socket.IO client disconnected: " + client.getSessionId())
         );
 
+        // Allow clients to join/leave chat threads
+        server.addEventListener("joinThread", String.class, (client, room, ackRequest) -> {
+            if (room != null && !room.isBlank()) {
+                client.joinRoom("thread:" + room);
+                System.out.println("Client " + client.getSessionId() + " joined thread room: thread:" + room);
+            }
+        });
+        server.addEventListener("leaveThread", String.class, (client, room, ackRequest) -> {
+            if (room != null && !room.isBlank()) {
+                client.leaveRoom("thread:" + room);
+                System.out.println("Client " + client.getSessionId() + " left thread room: thread:" + room);
+            }
+        });
+
         server.start();
         System.out.println("Socket.IO server started on port 9092");
     }
 
     private static com.corundumstudio.socketio.Configuration getConfiguration() {
         com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
-        config.setHostname("0.0.0.0"); // Adjust if needed
-        config.setPort(9092); // Socket.IO server port
+        config.setHostname("0.0.0.0");
+        config.setPort(9092);
 
-        // IMPORTANT: Set allowed origins
-        // This ensures that http://localhost:3000 can connect to the Socket.IO server on port 9092
+        // Set allowed origins for CORS
         config.setOrigin("http://localhost:3000");
-
-        // This is the key line to allow custom requests (including cookies)
         config.setAllowCustomRequests(true);
+
+        // Configure Jackson with Java 8 date/time support
+        config.setJsonSupport(new com.corundumstudio.socketio.protocol.JacksonJsonSupport(new JavaTimeModule()));
+
         return config;
     }
 
