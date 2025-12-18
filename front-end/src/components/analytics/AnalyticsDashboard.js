@@ -1,15 +1,71 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { 
   FiTrendingUp, FiTrendingDown, FiPieChart, FiCalendar,
   FiRefreshCw, FiArrowUp, FiArrowDown, FiAlertCircle,
   FiZap, FiDollarSign, FiUsers, FiTarget, FiAward,
-  FiActivity, FiGrid, FiStar, FiCheckCircle, FiFilter, FiX
+  FiActivity, FiGrid, FiStar, FiCheckCircle, FiFilter, FiX,
+  FiUser, FiInfo
 } from 'react-icons/fi';
+import api, { cachedGet, invalidateCache } from '../../services/api';
 import './AnalyticsDashboard.css';
 
 const API_URL = process.env.REACT_APP_API_URL;
+
+// ============ TOOLTIP COMPONENT ============
+const Tooltip = ({ children, content, position = 'top' }) => {
+  const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const ref = useRef(null);
+  
+  const handleMouseEnter = (e) => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setCoords({
+        x: rect.left + rect.width / 2,
+        y: position === 'top' ? rect.top : rect.bottom
+      });
+    }
+    setVisible(true);
+  };
+  
+  return (
+    <span 
+      ref={ref}
+      className="tooltip-wrapper"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setVisible(false)}
+    >
+      {children}
+      {visible && content && (
+        <div className={`tooltip-content tooltip-${position}`} style={{ 
+          left: coords.x,
+          top: position === 'top' ? coords.y - 8 : coords.y + 8
+        }}>
+          {content}
+        </div>
+      )}
+    </span>
+  );
+};
+
+// ============ INSIGHT DESCRIPTIONS ============
+const INSIGHT_TOOLTIPS = {
+  velocity: "Compares your spending in the current period vs the previous equivalent period. A positive value means you're spending more.",
+  daily: "Your average daily spending based on your expenses in the selected time range.",
+  forecast: `Projected total for this period. Calculated using your average spending per active day (${new Date().getDate()} days so far), projecting remaining days at 70% activity rate.`,
+  settlement: "Percentage of expenses that have been fully settled. Click to filter and see pending expenses.",
+  category: "Breakdown of your spending by category. Click a category to filter all data by it.",
+  trend: "Visual representation of your spending over time. Higher peaks indicate higher spending days.",
+  weekday: "Spending patterns by day of week. Helps identify which days you tend to spend more.",
+  group: "Spending breakdown by group. Shows which groups have the highest shared expenses.",
+  friend: "Balance summary with each friend. Positive means they owe you, negative means you owe them.",
+  personal: "Personal expenses are tracked only for yourself and not shared with others.",
+  monthly: "Month-over-month spending comparison for the last 6 months."
+};
+
+// ============ CACHE CONFIG ============
+const ANALYTICS_CACHE_TTL = 60000; // 1 minute cache for analytics data
 
 // Category icons
 const CATEGORY_ICONS = {
@@ -63,6 +119,7 @@ function AnalyticsDashboard() {
   const [trends, setTrends] = useState(null);
   const [balances, setBalances] = useState(null);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [dateRange, setDateRange] = useState('month');
   const [granularity, setGranularity] = useState('DAILY');
   
@@ -71,6 +128,38 @@ function AnalyticsDashboard() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // all, settled, unsettled
   const [activeKPI, setActiveKPI] = useState(null); // For clickable KPIs
+  
+  // Friend and Group filter states
+  const [filterFriend, setFilterFriend] = useState('');
+  const [filterGroup, setFilterGroup] = useState('');
+  const [friends, setFriends] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [loadingFilters, setLoadingFilters] = useState(false);
+  
+  // Fetch friends and groups for filter options
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      if (!myUserId || !token) return;
+      setLoadingFilters(true);
+      
+      try {
+        const [friendsRes, groupsRes] = await Promise.all([
+          cachedGet(`/home/friends?userId=${myUserId}`, {}, ANALYTICS_CACHE_TTL * 5),
+          cachedGet(`/groups/${myUserId}`, {}, ANALYTICS_CACHE_TTL * 5)
+        ]);
+        
+        setFriends(friendsRes.data || []);
+        setGroups(groupsRes.data || []);
+      } catch (err) {
+        console.warn('Failed to fetch filter options:', err.message);
+        // Non-critical error, don't block the UI
+      } finally {
+        setLoadingFilters(false);
+      }
+    };
+    
+    fetchFilterOptions();
+  }, [myUserId, token]);
   
   // Get unique categories from expenses
   const availableCategories = useMemo(() => {
@@ -114,6 +203,18 @@ function AnalyticsDashboard() {
       result = result.filter(exp => !exp.isSettled);
     }
     
+    // Apply friend filter - show expenses where this friend is a participant
+    if (filterFriend) {
+      result = result.filter(exp => 
+        exp.participants?.some(p => p.userId === filterFriend)
+      );
+    }
+    
+    // Apply group filter
+    if (filterGroup) {
+      result = result.filter(exp => exp.groupId === filterGroup);
+    }
+    
     // Apply KPI filter
     if (activeKPI === 'unsettled') {
       result = result.filter(exp => !exp.isSettled);
@@ -122,7 +223,7 @@ function AnalyticsDashboard() {
     }
     
     return result;
-  }, [expenses, dateRange, filterCategory, filterStatus, activeKPI]);
+  }, [expenses, dateRange, filterCategory, filterStatus, filterFriend, filterGroup, activeKPI]);
   
   const getDateRange = useCallback(() => {
     const end = new Date();
@@ -139,27 +240,68 @@ function AnalyticsDashboard() {
     return { startDate: start.toISOString().split('T')[0], endDate: end.toISOString().split('T')[0] };
   }, [dateRange]);
   
-  const fetchAnalytics = useCallback(async () => {
+  const fetchAnalytics = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     
     const { startDate, endDate } = getDateRange();
     
+    // Invalidate cache if force refresh
+    if (forceRefresh) {
+      invalidateCache('/analytics');
+    }
+    
     try {
-      const headers = { Authorization: `Bearer ${token}` };
+      // Use cached API calls for better performance
+      const fetchFn = forceRefresh ? api.get.bind(api) : 
+        (url) => cachedGet(url, {}, ANALYTICS_CACHE_TTL);
       
-      const [summaryRes, trendsRes, balancesRes] = await Promise.all([
-        axios.get(`${API_URL}/analytics/summary?startDate=${startDate}&endDate=${endDate}`, { headers }),
-        axios.get(`${API_URL}/analytics/trends?startDate=${startDate}&endDate=${endDate}&granularity=${granularity}&includeComparison=true`, { headers }),
-        axios.get(`${API_URL}/analytics/balances`, { headers })
+      const [summaryRes, trendsRes, balancesRes] = await Promise.allSettled([
+        fetchFn(`/analytics/summary?startDate=${startDate}&endDate=${endDate}`),
+        fetchFn(`/analytics/trends?startDate=${startDate}&endDate=${endDate}&granularity=${granularity}&includeComparison=true`),
+        fetchFn(`/analytics/balances`)
       ]);
       
-      setSummary(summaryRes.data);
-      setTrends(trendsRes.data);
-      setBalances(balancesRes.data);
+      // Handle partial failures gracefully
+      if (summaryRes.status === 'fulfilled') {
+        setSummary(summaryRes.value.data);
+      } else {
+        console.warn('Summary fetch failed:', summaryRes.reason?.message);
+      }
+      
+      if (trendsRes.status === 'fulfilled') {
+        setTrends(trendsRes.value.data);
+      } else {
+        console.warn('Trends fetch failed:', trendsRes.reason?.message);
+      }
+      
+      if (balancesRes.status === 'fulfilled') {
+        setBalances(balancesRes.value.data);
+      } else {
+        console.warn('Balances fetch failed:', balancesRes.reason?.message);
+      }
+      
+      // Only show error if ALL requests failed
+      const allFailed = [summaryRes, trendsRes, balancesRes].every(r => r.status === 'rejected');
+      if (allFailed) {
+        const errorMsg = summaryRes.reason?.response?.status === 429 
+          ? 'Too many requests. Please wait a moment and try again.'
+          : 'Failed to load analytics data. Please try again.';
+        setError(errorMsg);
+        setRetryCount(prev => prev + 1);
+      } else {
+        setRetryCount(0);
+      }
+      
     } catch (err) {
       console.error('Analytics fetch error:', err);
-      setError('Failed to load analytics data');
+      const errorMsg = err.response?.status === 429 
+        ? 'Rate limit exceeded. Please wait and try again.'
+        : err.response?.status === 401
+        ? 'Session expired. Please log in again.'
+        : 'Failed to load analytics data';
+      setError(errorMsg);
+      setRetryCount(prev => prev + 1);
     } finally {
       setLoading(false);
     }
@@ -276,36 +418,47 @@ function AnalyticsDashboard() {
     };
   }, [expenses, myUserId, dateRange]);
 
-  // Calculate forecast (projected spending)
+  // Calculate forecast (projected spending) - uses filtered expenses for accuracy
   const spendingForecast = useMemo(() => {
     const now = new Date();
     const dayOfMonth = now.getDate();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysRemaining = daysInMonth - dayOfMonth;
     
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    let monthSpend = 0;
+    // Use filtered expenses for the current period
+    const periodExpenses = filteredExpenses.length > 0 ? filteredExpenses : expenses;
     
-    expenses.forEach(exp => {
+    // Calculate spending within the date range
+    let periodSpend = 0;
+    let spendingDays = new Set();
+    
+    periodExpenses.forEach(exp => {
       const date = new Date(exp.date || exp.createdAt);
-      if (date >= monthStart && date <= now) {
-        const myPart = exp.participants?.find(p => p.userId === myUserId);
-        if (myPart) {
-          monthSpend += myPart.share || 0;
-        }
+      const myPart = exp.participants?.find(p => p.userId === myUserId);
+      if (myPart) {
+        periodSpend += myPart.share || 0;
+        spendingDays.add(date.toDateString());
       }
     });
     
-    const dailyAvg = dayOfMonth > 0 ? monthSpend / dayOfMonth : 0;
-    const projected = dailyAvg * daysInMonth;
-    const daysRemaining = daysInMonth - dayOfMonth;
+    // Calculate projection based on actual spending days, not calendar days
+    const activeDays = spendingDays.size || 1;
+    const avgPerActiveDay = periodSpend / activeDays;
+    
+    // Project remaining spending based on expected active days
+    // Assume ~70% of remaining days will have spending activity
+    const expectedActiveDaysRemaining = Math.ceil(daysRemaining * 0.7);
+    const projectedRemaining = avgPerActiveDay * expectedActiveDaysRemaining;
+    const projected = periodSpend + projectedRemaining;
     
     return {
-      currentSpend: monthSpend,
-      dailyAvg,
-      projected,
-      daysRemaining
+      currentSpend: periodSpend,
+      dailyAvg: avgPerActiveDay,
+      projected: projected,
+      daysRemaining,
+      activeDays
     };
-  }, [expenses, myUserId]);
+  }, [filteredExpenses, expenses, myUserId]);
 
   // Settlement score (percentage of settled expenses)
   const settlementScore = useMemo(() => {
@@ -480,10 +633,29 @@ function AnalyticsDashboard() {
   const clearFilters = () => {
     setFilterCategory('');
     setFilterStatus('all');
+    setFilterFriend('');
+    setFilterGroup('');
     setActiveKPI(null);
   };
 
-  const hasActiveFilters = filterCategory || filterStatus !== 'all' || activeKPI;
+  const hasActiveFilters = filterCategory || filterStatus !== 'all' || filterFriend || filterGroup || activeKPI;
+  
+  // Get active filter summary for display
+  const activeFilterSummary = useMemo(() => {
+    const parts = [];
+    if (filterCategory) parts.push(`Category: ${filterCategory}`);
+    if (filterStatus !== 'all') parts.push(`Status: ${filterStatus}`);
+    if (filterFriend) {
+      const friend = friends.find(f => f.id === filterFriend);
+      parts.push(`Friend: ${friend?.name || 'Unknown'}`);
+    }
+    if (filterGroup) {
+      const group = groups.find(g => g.id === filterGroup);
+      parts.push(`Group: ${group?.groupName || 'Unknown'}`);
+    }
+    if (activeKPI) parts.push(`KPI: ${activeKPI}`);
+    return parts.join(' • ');
+  }, [filterCategory, filterStatus, filterFriend, filterGroup, activeKPI, friends, groups]);
 
   if (loading) {
     return (
@@ -553,7 +725,9 @@ function AnalyticsDashboard() {
         <div className="inline-filters">
           <div className="filter-row">
             <div className="filter-item">
-              <label><FiPieChart size={12} /> Category</label>
+              <Tooltip content="Filter expenses by spending category">
+                <label><FiPieChart size={12} /> Category</label>
+              </Tooltip>
               <select 
                 value={filterCategory} 
                 onChange={(e) => setFilterCategory(e.target.value)}
@@ -567,7 +741,9 @@ function AnalyticsDashboard() {
             </div>
             
             <div className="filter-item">
-              <label><FiCheckCircle size={12} /> Status</label>
+              <Tooltip content="Filter by payment settlement status">
+                <label><FiCheckCircle size={12} /> Status</label>
+              </Tooltip>
               <div className="filter-chips">
                 {['all', 'settled', 'unsettled'].map(status => (
                   <button
@@ -581,159 +757,267 @@ function AnalyticsDashboard() {
               </div>
             </div>
             
+            <div className="filter-item">
+              <Tooltip content="Filter expenses shared with a specific friend">
+                <label><FiUser size={12} /> Friend</label>
+              </Tooltip>
+              <select 
+                value={filterFriend} 
+                onChange={(e) => setFilterFriend(e.target.value)}
+                className="filter-select"
+                disabled={loadingFilters}
+              >
+                <option value="">All Friends</option>
+                {friends.map(friend => (
+                  <option key={friend.id} value={friend.id}>{friend.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="filter-item">
+              <Tooltip content="Filter expenses from a specific group">
+                <label><FiUsers size={12} /> Group</label>
+              </Tooltip>
+              <select 
+                value={filterGroup} 
+                onChange={(e) => setFilterGroup(e.target.value)}
+                className="filter-select"
+                disabled={loadingFilters}
+              >
+                <option value="">All Groups</option>
+                {groups.map(group => (
+                  <option key={group.id} value={group.id}>{group.groupName}</option>
+                ))}
+              </select>
+            </div>
+            
             {hasActiveFilters && (
               <button className="clear-filters-btn" onClick={clearFilters}>
-                <FiX size={12} /> Clear
+                <FiX size={12} /> Clear All
               </button>
             )}
           </div>
           
-          {activeKPI && (
+          {hasActiveFilters && (
             <div className="active-filter-tag">
-              Filtering by: <strong>{activeKPI}</strong>
-              <button onClick={() => setActiveKPI(null)}><FiX size={10} /></button>
+              <FiFilter size={10} /> Active: <strong>{activeFilterSummary}</strong>
+              <span className="filter-count">{filteredExpenses.length} expenses</span>
             </div>
           )}
         </div>
       )}
 
       <div className="analytics-content">
-        {/* KPI Row - Clickable Insights */}
-        <div className="insight-cards">
-          {/* Spending Velocity */}
-          <div 
-            className={`insight-card velocity ${spendingVelocity.trend} ${activeKPI === 'velocity' ? 'selected' : ''}`}
-            onClick={() => handleKPIClick('velocity')}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="insight-icon">
-              {spendingVelocity.trend === 'up' ? <FiTrendingUp /> : 
-               spendingVelocity.trend === 'down' ? <FiTrendingDown /> : <FiActivity />}
+        {/* Hero KPI Row - Main Metrics */}
+        <div className="hero-kpi-section">
+          <div className="hero-kpi-grid">
+            <Tooltip content="Total amount spent across all expenses in this period" position="bottom">
+              <div className="hero-kpi total">
+                <span className="hero-emoji">💰</span>
+                <div className="hero-kpi-content">
+                  <span className="hero-kpi-value">{formatCurrency(spending?.totalSpent || 0)}</span>
+                  <span className="hero-kpi-label">Total Spent</span>
+                </div>
+              </div>
+            </Tooltip>
+            
+            <Tooltip content="Number of transactions in the selected period" position="bottom">
+              <div className="hero-kpi count">
+                <span className="hero-emoji">📊</span>
+                <div className="hero-kpi-content">
+                  <span className="hero-kpi-value">{filteredExpenses.length}</span>
+                  <span className="hero-kpi-label">Transactions</span>
+                </div>
+              </div>
+            </Tooltip>
+            
+            <Tooltip content={INSIGHT_TOOLTIPS.forecast} position="bottom">
+              <div className="hero-kpi forecast">
+                <span className="hero-emoji">🎯</span>
+                <div className="hero-kpi-content">
+                  <span className="hero-kpi-value">{formatCurrency(spendingForecast.projected)}</span>
+                  <span className="hero-kpi-label">Projected</span>
+                </div>
+              </div>
+            </Tooltip>
+            
+            <Tooltip content="Your highest spending day in this period" position="bottom">
+              <div className="hero-kpi peak">
+                <span className="hero-emoji">🏆</span>
+                <div className="hero-kpi-content">
+                  <span className="hero-kpi-value">{formatCurrency(spendingPatterns.biggestDay.amount || 0)}</span>
+                  <span className="hero-kpi-label">Peak Day</span>
+                </div>
+              </div>
+            </Tooltip>
+            
+            <Tooltip content={INSIGHT_TOOLTIPS.settlement} position="bottom">
+              <div 
+                className={`hero-kpi settlement ${activeKPI === 'unsettled' ? 'selected' : ''}`}
+                onClick={() => handleKPIClick('unsettled')}
+                role="button"
+                tabIndex={0}
+              >
+                <span className="hero-emoji">✅</span>
+                <div className="hero-kpi-content">
+                  <span className="hero-kpi-value">{settlementScore.percentage.toFixed(0)}%</span>
+                  <span className="hero-kpi-label">Settled</span>
+                </div>
+              </div>
+            </Tooltip>
+            
+            <Tooltip content={INSIGHT_TOOLTIPS.velocity} position="bottom">
+              <div className={`hero-kpi velocity ${spendingVelocity.trend}`}>
+                <span className="hero-emoji">{spendingVelocity.trend === 'up' ? '📈' : spendingVelocity.trend === 'down' ? '📉' : '➡️'}</span>
+                <div className="hero-kpi-content">
+                  <span className="hero-kpi-value">{spendingVelocity.change >= 0 ? '+' : ''}{spendingVelocity.change.toFixed(0)}%</span>
+                  <span className="hero-kpi-label">vs Last Period</span>
+                </div>
+              </div>
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* Top Charts Row: Monthly Comparison, Personal vs Shared, Payment Status */}
+        <div className="analytics-top-charts">
+          {/* Monthly Comparison Bar Chart */}
+          <div className="chart-panel monthly-panel">
+            <div className="section-header">
+              <h3><FiCalendar size={14} /> Monthly Comparison</h3>
             </div>
-            <div className="insight-content">
-              <span className="insight-value">
-                {spendingVelocity.change >= 0 ? '+' : ''}{spendingVelocity.change.toFixed(1)}%
-              </span>
-              <span className="insight-label">vs last period</span>
+            
+            <div className="monthly-bars compact">
+              {monthlyComparison.map((month, i) => (
+                <div key={i} className={`month-bar-wrapper ${month.isCurrent ? 'current' : ''}`}>
+                  <div 
+                    className="month-bar"
+                    style={{ height: `${Math.max(month.percentage, 5)}%` }}
+                  >
+                    <span className="month-bar-value">{formatCurrency(month.amount)}</span>
+                  </div>
+                  <span className="month-bar-label">{month.name}</span>
+                </div>
+              ))}
             </div>
           </div>
-          
-          {/* Daily Average */}
-          <div 
-            className={`insight-card highlight ${activeKPI === 'daily' ? 'selected' : ''}`}
-            onClick={() => handleKPIClick('daily')}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="insight-icon"><FiZap /></div>
-            <div className="insight-content">
-              <span className="insight-value">{formatCurrency(spending?.averagePerDay || spendingForecast.dailyAvg)}</span>
-              <span className="insight-label">avg per day</span>
+
+          {/* Personal vs Shared Breakdown */}
+          <div className="chart-panel personal-shared-panel">
+            <div className="section-header">
+              <h3><FiUsers size={14} /> Personal vs Shared</h3>
+            </div>
+            
+            <div className="expense-type-compact">
+              <div className="type-donut-mini">
+                <svg viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="10"/>
+                  <circle
+                    cx="50" cy="50" r="40" fill="none" stroke="#818cf8" strokeWidth="10"
+                    strokeDasharray={`${(expenseTypeBreakdown.personal.percentage / 100) * 251.2} 251.2`}
+                    transform="rotate(-90 50 50)"
+                  />
+                  <circle
+                    cx="50" cy="50" r="40" fill="none" stroke="#4ade80" strokeWidth="10"
+                    strokeDasharray={`${(expenseTypeBreakdown.shared.percentage / 100) * 251.2} 251.2`}
+                    strokeDashoffset={`${-(expenseTypeBreakdown.personal.percentage / 100) * 251.2}`}
+                    transform="rotate(-90 50 50)"
+                  />
+                  <text x="50" y="48" textAnchor="middle" className="donut-count">{filteredExpenses.length}</text>
+                  <text x="50" y="58" textAnchor="middle" className="donut-sublabel">expenses</text>
+                </svg>
+              </div>
+              <div className="type-legend-compact">
+                <div className={`type-row ${activeKPI === 'personal' ? 'active' : ''}`} onClick={() => handleKPIClick('personal')}>
+                  <span className="type-dot" style={{ background: '#818cf8' }}></span>
+                  <span className="type-name">👤 Personal</span>
+                  <span className="type-amount">{formatCurrency(expenseTypeBreakdown.personal.amount)}</span>
+                  <span className="type-badge">{expenseTypeBreakdown.personal.count}</span>
+                </div>
+                <div className="type-row">
+                  <span className="type-dot" style={{ background: '#4ade80' }}></span>
+                  <span className="type-name">👥 Shared</span>
+                  <span className="type-amount">{formatCurrency(expenseTypeBreakdown.shared.amount)}</span>
+                  <span className="type-badge">{expenseTypeBreakdown.shared.count}</span>
+                </div>
+              </div>
             </div>
           </div>
-          
-          {/* Monthly Forecast */}
-          <div 
-            className={`insight-card forecast ${activeKPI === 'forecast' ? 'selected' : ''}`}
-            onClick={() => handleKPIClick('forecast')}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="insight-icon"><FiTarget /></div>
-            <div className="insight-content">
-              <span className="insight-value">{formatCurrency(spendingForecast.projected)}</span>
-              <span className="insight-label">projected this month</span>
+
+          {/* Payment Status */}
+          <div className="chart-panel payment-panel">
+            <div className="section-header">
+              <h3><FiCheckCircle size={14} /> Payment Status</h3>
             </div>
-          </div>
-          
-          {/* Settlement Score - Clickable to filter unsettled */}
-          <div 
-            className={`insight-card score ${activeKPI === 'unsettled' ? 'selected' : ''}`}
-            onClick={() => handleKPIClick('unsettled')}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="insight-icon"><FiCheckCircle /></div>
-            <div className="insight-content">
-              <span className="insight-value">{settlementScore.percentage.toFixed(0)}%</span>
-              <span className="insight-label">
-                settled up {settlementScore.unsettledCount > 0 && `(${settlementScore.unsettledCount} pending)`}
-              </span>
+            
+            <div className="payment-bars-compact">
+              <div className="payment-row settled">
+                <div className="payment-header">
+                  <span className="payment-label">✓ Settled</span>
+                  <span className="payment-value">{formatCurrency(paymentStatus.settled.amount)}</span>
+                </div>
+                <div className="payment-bar-track">
+                  <div 
+                    className="payment-bar-fill"
+                    style={{ width: `${paymentStatus.settled.amount > 0 ? Math.max((paymentStatus.settled.amount / (paymentStatus.settled.amount + paymentStatus.unsettled.amount + paymentStatus.partial.amount)) * 100, 5) : 0}%` }}
+                  ></div>
+                </div>
+                <span className="payment-count">{paymentStatus.settled.count} expenses</span>
+              </div>
+              
+              <div className="payment-row pending">
+                <div className="payment-header">
+                  <span className="payment-label">⏳ Pending</span>
+                  <span className="payment-value">{formatCurrency(paymentStatus.unsettled.amount)}</span>
+                </div>
+                <div className="payment-bar-track">
+                  <div 
+                    className="payment-bar-fill warning"
+                    style={{ width: `${paymentStatus.unsettled.amount > 0 ? Math.max((paymentStatus.unsettled.amount / (paymentStatus.settled.amount + paymentStatus.unsettled.amount + paymentStatus.partial.amount)) * 100, 5) : 0}%` }}
+                  ></div>
+                </div>
+                <span className="payment-count">{paymentStatus.unsettled.count} expenses</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Main Analytics Grid */}
-        <div className="analytics-main-grid">
-          {/* Spending Trend */}
-          <div className="chart-section">
-            <div className="section-header">
-              <h3><FiTrendingUp size={14} /> Spending Trend</h3>
-              {trendSummary && (
-                <div className={`trend-badge ${trendSummary.trendDirection?.toLowerCase()}`}>
-                  {trendSummary.trendDirection === 'UP' && <FiArrowUp size={10} />}
-                  {trendSummary.trendDirection === 'DOWN' && <FiArrowDown size={10} />}
-                  {Math.abs(trendSummary.trendPercentage || 0).toFixed(1)}%
-                </div>
-              )}
+        {/* Secondary KPI Strip */}
+        <div className="secondary-kpi-strip">
+          <Tooltip content={INSIGHT_TOOLTIPS.daily} position="bottom">
+            <div className="strip-kpi">
+              <FiZap className="strip-icon" />
+              <span className="strip-value">{formatCurrency(spending?.averagePerDay || spendingForecast.dailyAvg)}</span>
+              <span className="strip-label">avg/day</span>
             </div>
-            
-            <div className="trend-chart-area">
-              {trendPoints.length > 0 ? (
-                <div className="area-chart">
-                  <svg viewBox="0 0 400 120" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4"/>
-                        <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.05"/>
-                      </linearGradient>
-                    </defs>
-                    {(() => {
-                      const maxVal = Math.max(...trendPoints.map(p => p.spending || 0), 1);
-                      const points = trendPoints.map((p, i) => {
-                        const x = (i / Math.max(trendPoints.length - 1, 1)) * 400;
-                        const y = 110 - ((p.spending || 0) / maxVal) * 100;
-                        return `${x},${y}`;
-                      }).join(' ');
-                      const areaPath = `M0,110 L${points} L400,110 Z`;
-                      return (
-                        <>
-                          <path d={areaPath} fill="url(#areaGradient)" />
-                          <polyline points={points} fill="none" stroke="#38bdf8" strokeWidth="2" />
-                        </>
-                      );
-                    })()}
-                  </svg>
-                  <div className="chart-labels">
-                    {trendPoints.filter((_, i) => i % Math.ceil(trendPoints.length / 5) === 0).map((p, i) => (
-                      <span key={i}>{p.label}</span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="no-data">No spending data for this period</div>
-              )}
-            </div>
-            
-            {trendSummary && (
-              <div className="chart-stats">
-                <div className="chart-stat">
-                  <span className="stat-value">{formatCurrency(trendSummary.highestPeriodAmount)}</span>
-                  <span className="stat-label">Peak</span>
-                </div>
-                <div className="chart-stat">
-                  <span className="stat-value">{formatCurrency(trendSummary.averagePerPeriod)}</span>
-                  <span className="stat-label">Average</span>
-                </div>
-                <div className="chart-stat">
-                  <span className="stat-value">{formatCurrency(trendSummary.lowestPeriodAmount)}</span>
-                  <span className="stat-label">Low</span>
-                </div>
-              </div>
-            )}
+          </Tooltip>
+          <div className="strip-divider"></div>
+          <div className="strip-kpi">
+            <FiCalendar className="strip-icon" />
+            <span className="strip-value">{spendingPatterns.spendingDays}</span>
+            <span className="strip-label">active days</span>
           </div>
+          <div className="strip-divider"></div>
+          <div className="strip-kpi clickable" onClick={() => handleKPIClick('personal')}>
+            <FiUser className="strip-icon" />
+            <span className="strip-value">{expenseTypeBreakdown.personal.count}</span>
+            <span className="strip-label">personal</span>
+          </div>
+          <div className="strip-divider"></div>
+          <div className="strip-kpi">
+            <FiUsers className="strip-icon" />
+            <span className="strip-value">{expenseTypeBreakdown.shared.count}</span>
+            <span className="strip-label">shared</span>
+          </div>
+          <div className="strip-divider"></div>
+          <div className="strip-kpi">
+            <FiTarget className="strip-icon" />
+            <span className="strip-value">{formatCurrency(topExpenses[0]?.amount || 0)}</span>
+            <span className="strip-label">largest</span>
+          </div>
+        </div>
 
+        {/* Main Analytics Grid: Category + Spending Trend Side by Side */}
+        <div className="analytics-dual-grid">
           {/* Category Breakdown with Donut */}
           <div className="category-section">
             <div className="section-header">
@@ -803,33 +1087,106 @@ function AnalyticsDashboard() {
               )}
             </div>
           </div>
+
+          {/* Spending Trend - Now inline with Category */}
+          <div className="trend-section-inline">
+            <div className="section-header">
+              <Tooltip content={INSIGHT_TOOLTIPS.trend}>
+                <h3><FiTrendingUp size={14} /> Spending Trend <FiInfo size={10} className="header-info" /></h3>
+              </Tooltip>
+              {trendSummary && (
+                <div className={`trend-badge ${trendSummary.trendDirection?.toLowerCase()}`}>
+                  {trendSummary.trendDirection === 'UP' && <FiArrowUp size={10} />}
+                  {trendSummary.trendDirection === 'DOWN' && <FiArrowDown size={10} />}
+                  {Math.abs(trendSummary.trendPercentage || 0).toFixed(1)}%
+                </div>
+              )}
+            </div>
+            
+            <div className="trend-chart-inline">
+              {trendPoints.length > 0 ? (
+                <div className="area-chart">
+                  <svg viewBox="0 0 400 80" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="areaGradientInline" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4"/>
+                        <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.05"/>
+                      </linearGradient>
+                    </defs>
+                    {(() => {
+                      const maxVal = Math.max(...trendPoints.map(p => p.spending || 0), 1);
+                      const points = trendPoints.map((p, i) => {
+                        const x = (i / Math.max(trendPoints.length - 1, 1)) * 400;
+                        const y = 70 - ((p.spending || 0) / maxVal) * 60;
+                        return `${x},${y}`;
+                      }).join(' ');
+                      const areaPath = `M0,70 L${points} L400,70 Z`;
+                      return (
+                        <>
+                          <path d={areaPath} fill="url(#areaGradientInline)" />
+                          <polyline points={points} fill="none" stroke="#38bdf8" strokeWidth="2" />
+                        </>
+                      );
+                    })()}
+                  </svg>
+                  <div className="chart-labels">
+                    {trendPoints.filter((_, i) => i % Math.ceil(trendPoints.length / 5) === 0).map((p, i) => (
+                      <span key={i}>{p.label}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="no-data">No trend data</div>
+              )}
+            </div>
+            
+            {trendSummary && (
+              <div className="chart-stats-inline">
+                <div className="chart-stat">
+                  <span className="stat-value">{formatCurrency(trendSummary.highestPeriodAmount)}</span>
+                  <span className="stat-label">Peak</span>
+                </div>
+                <div className="chart-stat">
+                  <span className="stat-value">{formatCurrency(trendSummary.averagePerPeriod)}</span>
+                  <span className="stat-label">Avg</span>
+                </div>
+                <div className="chart-stat">
+                  <span className="stat-value">{formatCurrency(trendSummary.lowestPeriodAmount)}</span>
+                  <span className="stat-label">Low</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Secondary Grid - Heatmap, Groups, Top Expenses */}
         <div className="analytics-secondary-grid">
-          {/* Weekday Heatmap - Fixed */}
+          {/* Weekday Spending - Fixed Bar Chart */}
           <div className="heatmap-section">
             <div className="section-header">
               <h3><FiGrid size={14} /> Spending by Day</h3>
             </div>
             
-            <div className="weekday-heatmap">
+            <div className="weekday-bars-container">
               {weekdaySpending.map((day, i) => {
-                const barHeight = Math.max(day.intensity * 100, 5);
+                // Calculate proper height based on max value
+                const maxVal = Math.max(...weekdaySpending.map(d => d.total), 1);
+                const heightPercent = day.total > 0 ? Math.max((day.total / maxVal) * 100, 8) : 5;
+                const opacity = day.total > 0 ? 0.5 + (day.total / maxVal) * 0.5 : 0.2;
+                
                 return (
-                  <div key={i} className="heatmap-cell">
-                    <div 
-                      className="heatmap-bar"
-                      style={{ 
-                        height: `${barHeight}%`,
-                        background: day.total > 0 
-                          ? `linear-gradient(to top, rgba(56, 189, 248, ${0.3 + day.intensity * 0.7}), rgba(129, 140, 248, ${0.3 + day.intensity * 0.7}))`
-                          : 'rgba(255,255,255,0.1)'
-                      }}
-                    >
-                      <span className="heatmap-value">{formatCurrency(day.total)}</span>
+                  <div key={i} className="weekday-bar-col">
+                    <div className="weekday-bar-wrapper">
+                      <div 
+                        className={`weekday-bar ${day.total > 0 ? 'active' : ''}`}
+                        style={{ 
+                          height: `${heightPercent}%`,
+                          opacity: opacity
+                        }}
+                      />
+                      <span className="weekday-amount">{formatCurrency(day.total)}</span>
                     </div>
-                    <span className="heatmap-label">{day.name}</span>
+                    <span className="weekday-label">{day.name}</span>
                   </div>
                 );
               })}
@@ -905,212 +1262,45 @@ function AnalyticsDashboard() {
           </div>
         </div>
 
-        {/* Settlement Status Row */}
-        <div className="settlement-row">
-          <div className="settlement-section full-width">
-            <div className="section-header">
-              <h3><FiDollarSign size={14} /> Friend Balances</h3>
-            </div>
-            
-            <div className="settlement-grid">
-              {friendBalances.length > 0 ? (
-                friendBalances.slice(0, 6).map((fb, idx) => {
-                  const isOwed = fb.balance >= 0;
-                  const maxBalance = Math.max(...friendBalances.map(f => Math.abs(f.balance)), 1);
-                  const barWidth = Math.min((Math.abs(fb.balance) / maxBalance) * 100, 100);
-                  
-                  return (
-                    <div key={idx} className="settlement-card">
-                      <div className="settlement-avatar" style={{ 
-                        background: isOwed ? 'linear-gradient(135deg, #4ade80, #22c55e)' : 'linear-gradient(135deg, #fb7185, #ef4444)'
-                      }}>
-                        {fb.friendName?.charAt(0)?.toUpperCase()}
-                      </div>
-                      <div className="settlement-details">
-                        <span className="settlement-name">{fb.friendName}</span>
-                        <div className="settlement-bar-container">
-                          <div 
-                            className={`settlement-bar ${isOwed ? 'positive' : 'negative'}`}
-                            style={{ width: `${barWidth}%` }}
-                          />
-                        </div>
-                      </div>
-                      <span className={`settlement-amount ${isOwed ? 'positive' : 'negative'}`}>
-                        {isOwed ? '+' : ''}{formatCurrency(fb.balance)}
-                      </span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="no-data centered">All settled up! 🎉</div>
-              )}
-            </div>
+        {/* Friend Balances - At Bottom - Full Width */}
+        <div className="friend-balances-section">
+          <div className="section-header">
+            <h3><FiDollarSign size={14} /> Friend Balances</h3>
           </div>
-        </div>
-
-        {/* Advanced Analytics Grid */}
-        <div className="analytics-advanced-grid">
-          {/* Monthly Comparison Bar Chart */}
-          <div className="monthly-comparison-section">
-            <div className="section-header">
-              <h3><FiCalendar size={14} /> Monthly Comparison</h3>
-            </div>
-            
-            <div className="monthly-bars">
-              {monthlyComparison.map((month, i) => (
-                <div key={i} className={`month-bar-wrapper ${month.isCurrent ? 'current' : ''}`}>
-                  <div 
-                    className="month-bar"
-                    style={{ height: `${Math.max(month.percentage, 5)}%` }}
-                  >
-                    <span className="month-bar-value">{formatCurrency(month.amount)}</span>
-                  </div>
-                  <span className="month-bar-label">{month.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Personal vs Shared Breakdown */}
-          <div className="expense-type-section">
-            <div className="section-header">
-              <h3><FiUsers size={14} /> Personal vs Shared</h3>
-            </div>
-            
-            <div className="expense-type-visual">
-              <div className="type-donut">
-                <svg viewBox="0 0 100 100">
-                  <circle
-                    cx="50" cy="50" r="40"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.1)"
-                    strokeWidth="8"
-                  />
-                  <circle
-                    cx="50" cy="50" r="40"
-                    fill="none"
-                    stroke="#818cf8"
-                    strokeWidth="8"
-                    strokeDasharray={`${(expenseTypeBreakdown.personal.percentage / 100) * 251.2} 251.2`}
-                    strokeDashoffset="0"
-                    transform="rotate(-90 50 50)"
-                  />
-                  <circle
-                    cx="50" cy="50" r="40"
-                    fill="none"
-                    stroke="#4ade80"
-                    strokeWidth="8"
-                    strokeDasharray={`${(expenseTypeBreakdown.shared.percentage / 100) * 251.2} 251.2`}
-                    strokeDashoffset={`${-(expenseTypeBreakdown.personal.percentage / 100) * 251.2}`}
-                    transform="rotate(-90 50 50)"
-                  />
-                  <text x="50" y="48" textAnchor="middle" className="donut-count">
-                    {filteredExpenses.length}
-                  </text>
-                  <text x="50" y="58" textAnchor="middle" className="donut-sublabel">
-                    expenses
-                  </text>
-                </svg>
-              </div>
-              
-              <div className="type-legend">
-                <div 
-                  className={`type-item ${activeKPI === 'personal' ? 'active' : ''}`}
-                  onClick={() => handleKPIClick('personal')}
-                >
-                  <span className="type-dot" style={{ background: '#818cf8' }}></span>
-                  <div className="type-info">
-                    <span className="type-label">👤 Personal</span>
-                    <span className="type-value">{formatCurrency(expenseTypeBreakdown.personal.amount)}</span>
-                  </div>
-                  <span className="type-count">{expenseTypeBreakdown.personal.count}</span>
-                </div>
+          
+          <div className="friend-balances-grid">
+            {friendBalances.length > 0 ? (
+              friendBalances.slice(0, 8).map((fb, idx) => {
+                const isOwed = fb.balance >= 0;
+                const maxBalance = Math.max(...friendBalances.map(f => Math.abs(f.balance)), 1);
+                const barWidth = Math.min((Math.abs(fb.balance) / maxBalance) * 100, 100);
                 
-                <div className="type-item">
-                  <span className="type-dot" style={{ background: '#4ade80' }}></span>
-                  <div className="type-info">
-                    <span className="type-label">👥 Shared</span>
-                    <span className="type-value">{formatCurrency(expenseTypeBreakdown.shared.amount)}</span>
+                return (
+                  <div key={idx} className="friend-balance-card">
+                    <div className="friend-avatar" style={{ 
+                      background: isOwed ? 'linear-gradient(135deg, #4ade80, #22c55e)' : 'linear-gradient(135deg, #fb7185, #ef4444)'
+                    }}>
+                      {fb.friendName?.charAt(0)?.toUpperCase()}
+                    </div>
+                    <div className="friend-details">
+                      <span className="friend-name">{fb.friendName}</span>
+                      <div className="friend-bar-container">
+                        <div 
+                          className={`friend-bar ${isOwed ? 'positive' : 'negative'}`}
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className={`friend-amount ${isOwed ? 'positive' : 'negative'}`}>
+                      {isOwed ? '+' : ''}{formatCurrency(fb.balance)}
+                    </span>
                   </div>
-                  <span className="type-count">{expenseTypeBreakdown.shared.count}</span>
-                </div>
-              </div>
-            </div>
+                );
+              })
+            ) : (
+              <div className="no-data centered">All settled up! 🎉</div>
+            )}
           </div>
-
-          {/* Payment Status */}
-          <div className="payment-status-section">
-            <div className="section-header">
-              <h3><FiCheckCircle size={14} /> Payment Status</h3>
-            </div>
-            
-            <div className="payment-status-bars">
-              <div className="status-bar-item">
-                <div className="status-bar-header">
-                  <span className="status-label">✓ Settled</span>
-                  <span className="status-value">{formatCurrency(paymentStatus.settled.amount)}</span>
-                </div>
-                <div className="status-bar-track">
-                  <div 
-                    className="status-bar-fill settled"
-                    style={{ width: `${paymentStatus.settled.amount > 0 ? Math.max((paymentStatus.settled.amount / (paymentStatus.settled.amount + paymentStatus.unsettled.amount + paymentStatus.partial.amount)) * 100, 5) : 0}%` }}
-                  ></div>
-                </div>
-                <span className="status-count">{paymentStatus.settled.count} expenses</span>
-              </div>
-              
-              <div className="status-bar-item">
-                <div className="status-bar-header">
-                  <span className="status-label">⏳ Pending</span>
-                  <span className="status-value">{formatCurrency(paymentStatus.unsettled.amount)}</span>
-                </div>
-                <div className="status-bar-track">
-                  <div 
-                    className="status-bar-fill pending"
-                    style={{ width: `${paymentStatus.unsettled.amount > 0 ? Math.max((paymentStatus.unsettled.amount / (paymentStatus.settled.amount + paymentStatus.unsettled.amount + paymentStatus.partial.amount)) * 100, 5) : 0}%` }}
-                  ></div>
-                </div>
-                <span className="status-count">{paymentStatus.unsettled.count} expenses</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Spending Insights Row */}
-        <div className="spending-insights-row">
-          <div className="insight-stat-card">
-            <div className="stat-icon">🔥</div>
-            <div className="stat-info">
-              <span className="stat-number">{spendingPatterns.spendingDays}</span>
-              <span className="stat-text">days with spending</span>
-            </div>
-          </div>
-          
-          <div className="insight-stat-card">
-            <div className="stat-icon">💸</div>
-            <div className="stat-info">
-              <span className="stat-number">{formatCurrency(spendingPatterns.avgPerSpendingDay)}</span>
-              <span className="stat-text">avg per spending day</span>
-            </div>
-          </div>
-          
-          <div className="insight-stat-card">
-            <div className="stat-icon">📊</div>
-            <div className="stat-info">
-              <span className="stat-number">{spendingPatterns.totalTransactions}</span>
-              <span className="stat-text">total transactions</span>
-            </div>
-          </div>
-          
-          {spendingPatterns.biggestDay.date && (
-            <div className="insight-stat-card highlight">
-              <div className="stat-icon">🏆</div>
-              <div className="stat-info">
-                <span className="stat-number">{formatCurrency(spendingPatterns.biggestDay.amount)}</span>
-                <span className="stat-text">biggest spending day</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}

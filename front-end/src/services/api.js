@@ -1,11 +1,13 @@
 /**
- * Optimized Axios API configuration with compression support.
+ * Optimized Axios API configuration with advanced caching and rate limiting awareness.
  * 
  * Features:
  * - Automatic compression negotiation (Accept-Encoding)
  * - Request/Response interceptors for performance monitoring
- * - Retry logic for failed requests
+ * - Retry logic for failed requests with exponential backoff
  * - Request deduplication
+ * - Multi-tier caching (memory + session storage)
+ * - Rate limit detection and backoff
  */
 import axios from "axios";
 
@@ -15,14 +17,16 @@ const api = axios.create({
   timeout: 30000, // 30 second timeout
   headers: {
     "Content-Type": "application/json",
-    // Accept-Encoding is automatically handled by browsers/axios
-    // But we explicitly state our preference for compressed responses
     "Accept": "application/json",
   },
 });
 
 // Request deduplication cache
 const pendingRequests = new Map();
+
+// Rate limit tracking
+let rateLimitBackoff = 0;
+let rateLimitResetTime = 0;
 
 /**
  * Generate a unique key for request deduplication
@@ -34,6 +38,17 @@ const getRequestKey = (config) => {
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
+    // Check if we're in rate limit backoff
+    if (rateLimitBackoff > 0 && Date.now() < rateLimitResetTime) {
+      const waitTime = Math.ceil((rateLimitResetTime - Date.now()) / 1000);
+      console.warn(`Rate limit active, waiting ${waitTime}s before retry`);
+      return Promise.reject({ 
+        __RATE_LIMITED__: true, 
+        waitTime,
+        message: `Rate limited. Please wait ${waitTime} seconds.`
+      });
+    }
+    
     // Add auth token if available
     const token = localStorage.getItem("splitzyToken");
     if (token) {
@@ -72,6 +87,12 @@ api.interceptors.response.use(
     if (response.config._requestKey) {
       pendingRequests.delete(response.config._requestKey);
     }
+    
+    // Clear rate limit backoff on successful response
+    if (rateLimitBackoff > 0) {
+      rateLimitBackoff = 0;
+      rateLimitResetTime = 0;
+    }
 
     // Log performance metrics in development
     if (process.env.NODE_ENV === "development" && response.config._startTime) {
@@ -91,7 +112,7 @@ api.interceptors.response.use(
   },
   (error) => {
     // Handle cancelled duplicate requests silently
-    if (error.__CANCEL__) {
+    if (error.__CANCEL__ || error.__RATE_LIMITED__) {
       return Promise.reject(error);
     }
 
@@ -99,12 +120,36 @@ api.interceptors.response.use(
     if (error.config?._requestKey) {
       pendingRequests.delete(error.config._requestKey);
     }
+    
+    // Handle rate limiting (429 Too Many Requests)
+    if (error.response?.status === 429) {
+      // Exponential backoff: 5s, 10s, 20s, max 60s
+      rateLimitBackoff = Math.min(rateLimitBackoff === 0 ? 5000 : rateLimitBackoff * 2, 60000);
+      rateLimitResetTime = Date.now() + rateLimitBackoff;
+      
+      const retryAfter = error.response.headers['retry-after'];
+      if (retryAfter) {
+        rateLimitResetTime = Date.now() + (parseInt(retryAfter, 10) * 1000);
+      }
+      
+      console.warn(`Rate limit hit. Backing off for ${rateLimitBackoff / 1000}s`);
+      
+      error.isRateLimited = true;
+      error.retryAfter = Math.ceil(rateLimitBackoff / 1000);
+      return Promise.reject(error);
+    }
 
-    // Retry logic for network errors (not for 4xx/5xx)
+    // Retry logic for network errors with exponential backoff
     if (!error.response && error.config && !error.config._retried) {
-      error.config._retried = true;
-      console.warn("Network error, retrying request...", error.config.url);
-      return api(error.config);
+      const retryCount = error.config._retryCount || 0;
+      if (retryCount < 3) {
+        error.config._retryCount = retryCount + 1;
+        error.config._retried = true;
+        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        console.warn(`Network error, retrying in ${delay/1000}s...`, error.config.url);
+        return new Promise(resolve => setTimeout(resolve, delay))
+          .then(() => api(error.config));
+      }
     }
 
     return Promise.reject(error);
@@ -115,34 +160,123 @@ api.interceptors.response.use(
  * Batch multiple API requests for efficiency
  */
 export const batchRequests = async (requests) => {
-  return Promise.all(requests.map(req => api(req)));
+  return Promise.allSettled(requests.map(req => api(req)));
+};
+
+// ============ MULTI-TIER CACHING SYSTEM ============
+const memoryCache = new Map();
+const CACHE_TTL = 30000; // 30 seconds default
+const SESSION_CACHE_KEY = 'splitzy_api_cache';
+const MAX_CACHE_SIZE = 100;
+
+// Cache TTL configuration by endpoint pattern
+const CACHE_CONFIG = {
+  '/home/friends': { ttl: 300000, persist: true },     // 5 min - friends rarely change
+  '/groups': { ttl: 300000, persist: true },           // 5 min - groups rarely change
+  '/analytics/summary': { ttl: 60000, persist: false }, // 1 min - analytics
+  '/analytics/trends': { ttl: 60000, persist: false },  // 1 min - analytics
+  '/analytics/balances': { ttl: 60000, persist: false }, // 1 min - analytics
+  '/profile': { ttl: 300000, persist: true },           // 5 min - profile data
+  '/notifications': { ttl: 30000, persist: false },     // 30s - notifications are time-sensitive
+  'default': { ttl: 30000, persist: false }
 };
 
 /**
- * Cached fetch with optional TTL
+ * Get cache configuration for a URL
  */
-const cache = new Map();
-const CACHE_TTL = 30000; // 30 seconds
+const getCacheConfig = (url) => {
+  for (const [pattern, config] of Object.entries(CACHE_CONFIG)) {
+    if (pattern !== 'default' && url.includes(pattern)) {
+      return config;
+    }
+  }
+  return CACHE_CONFIG.default;
+};
 
-export const cachedGet = async (url, config = {}, ttl = CACHE_TTL) => {
+/**
+ * Load persisted cache from session storage
+ */
+const loadPersistedCache = () => {
+  try {
+    const stored = sessionStorage.getItem(SESSION_CACHE_KEY);
+    if (stored) {
+      const data = JSON.parse(stored);
+      const now = Date.now();
+      // Only restore non-expired entries
+      Object.entries(data).forEach(([key, value]) => {
+        const config = getCacheConfig(key);
+        if (now - value.timestamp < config.ttl) {
+          memoryCache.set(key, value);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to load cache from session storage:', e.message);
+  }
+};
+
+/**
+ * Persist cache to session storage
+ */
+const persistCache = () => {
+  try {
+    const persistable = {};
+    memoryCache.forEach((value, key) => {
+      const config = getCacheConfig(key);
+      if (config.persist) {
+        persistable[key] = value;
+      }
+    });
+    sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(persistable));
+  } catch (e) {
+    console.warn('Failed to persist cache:', e.message);
+  }
+};
+
+// Load cache on module init
+loadPersistedCache();
+
+/**
+ * Cached fetch with intelligent TTL based on endpoint
+ * @param {string} url - API endpoint
+ * @param {object} config - Axios config
+ * @param {number} ttl - Optional TTL override in ms
+ */
+export const cachedGet = async (url, config = {}, ttl) => {
   const cacheKey = `${url}:${JSON.stringify(config.params || {})}`;
-  const cached = cache.get(cacheKey);
+  const cached = memoryCache.get(cacheKey);
+  const cacheConfig = getCacheConfig(url);
+  const effectiveTtl = ttl || cacheConfig.ttl;
   
-  if (cached && Date.now() - cached.timestamp < ttl) {
+  // Return cached if valid
+  if (cached && Date.now() - cached.timestamp < effectiveTtl) {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`💾 Cache hit: ${url}`);
+    }
     return { ...cached.response, _cached: true };
   }
   
+  // Fetch fresh data
   const response = await api.get(url, config);
-  cache.set(cacheKey, { response, timestamp: Date.now() });
   
-  // Clean old cache entries
-  if (cache.size > 100) {
-    const now = Date.now();
-    for (const [key, value] of cache) {
-      if (now - value.timestamp > ttl) {
-        cache.delete(key);
-      }
-    }
+  // Store in cache
+  memoryCache.set(cacheKey, { 
+    response: { data: response.data, status: response.status },
+    timestamp: Date.now() 
+  });
+  
+  // Evict old entries if cache is too large
+  if (memoryCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(memoryCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    // Remove oldest 20%
+    const toRemove = Math.ceil(entries.length * 0.2);
+    entries.slice(0, toRemove).forEach(([key]) => memoryCache.delete(key));
+  }
+  
+  // Persist if configured
+  if (cacheConfig.persist) {
+    persistCache();
   }
   
   return response;
@@ -152,11 +286,51 @@ export const cachedGet = async (url, config = {}, ttl = CACHE_TTL) => {
  * Clear cache for a specific URL pattern
  */
 export const invalidateCache = (urlPattern) => {
-  for (const key of cache.keys()) {
+  let cleared = 0;
+  for (const key of memoryCache.keys()) {
     if (key.includes(urlPattern)) {
-      cache.delete(key);
+      memoryCache.delete(key);
+      cleared++;
     }
   }
+  persistCache();
+  if (process.env.NODE_ENV === 'development' && cleared > 0) {
+    console.debug(`🗑️ Invalidated ${cleared} cache entries for pattern: ${urlPattern}`);
+  }
+};
+
+/**
+ * Clear all cache
+ */
+export const clearAllCache = () => {
+  memoryCache.clear();
+  sessionStorage.removeItem(SESSION_CACHE_KEY);
+};
+
+/**
+ * Get cache statistics
+ */
+export const getCacheStats = () => {
+  return {
+    size: memoryCache.size,
+    maxSize: MAX_CACHE_SIZE,
+    entries: Array.from(memoryCache.keys())
+  };
+};
+
+/**
+ * Check if rate limited
+ */
+export const isRateLimited = () => {
+  return rateLimitBackoff > 0 && Date.now() < rateLimitResetTime;
+};
+
+/**
+ * Get rate limit wait time in seconds
+ */
+export const getRateLimitWaitTime = () => {
+  if (!isRateLimited()) return 0;
+  return Math.ceil((rateLimitResetTime - Date.now()) / 1000);
 };
 
 export default api;

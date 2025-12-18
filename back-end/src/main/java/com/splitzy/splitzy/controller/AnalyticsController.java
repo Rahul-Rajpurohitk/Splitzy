@@ -200,13 +200,13 @@ public class AnalyticsController {
     // ==========================================
 
     private String getUserId(Authentication auth) {
-        if (auth == null) {
-            throw new RuntimeException("Not authenticated");
+        if (auth == null || auth.getName() == null) {
+            throw new IllegalStateException("Authentication required");
         }
         // auth.getName() returns the email from JWT subject
         String email = auth.getName();
         UserDto user = userDao.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found: " + email));
+                .orElseThrow(() -> new com.splitzy.splitzy.exception.ResourceNotFoundException("User", email));
         return user.getId();
     }
 

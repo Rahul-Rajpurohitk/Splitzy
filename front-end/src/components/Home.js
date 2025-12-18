@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import axios from 'axios';
 import Friends from './Friends';
 import Notification from './Notification';
@@ -12,7 +12,7 @@ import Groups from './Groups';
 import ProfilePanel from './ProfilePanel';
 import { 
   FiHome, FiBarChart2, FiUsers, FiX, FiClock, 
-  FiChevronDown, FiChevronUp, FiDollarSign, FiTrendingUp, FiPieChart
+  FiChevronDown, FiChevronUp, FiTrendingUp
 } from 'react-icons/fi';
 import ChatDropdown from './chat/ChatDropdown';
 import ChatWindow from './chat/ChatWindow';
@@ -46,23 +46,40 @@ function getCategoryIcon(category) {
 
 function formatTimeAgo(dateStr) {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '';
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
+// Safe number formatting to prevent NaN/Infinity display
+function safeNumber(value, defaultValue = 0) {
+  if (value === null || value === undefined || !isFinite(value)) {
+    return defaultValue;
+  }
+  return value;
+}
+
+function safeFixed(value, decimals = 2) {
+  const num = safeNumber(value);
+  return num.toFixed(decimals);
 }
 
 function Home() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const myUserId = localStorage.getItem('myUserId');
   const username = localStorage.getItem('myUserName');
   const avatarUrl = localStorage.getItem('myUserAvatar') || '';
@@ -124,30 +141,40 @@ function Home() {
   // Get expenses from Redux
   const expenses = useSelector((state) => state.expense.list);
 
-  // Calculate user's overall balance
+  // Calculate user's overall balance - split by shared and personal
   const balanceData = useMemo(() => {
-    let totalOwed = 0;
-    let totalOwing = 0;
+    let sharedOwed = 0;
+    let sharedOwing = 0;
+    let personalTotal = 0;
     let expenseCount = expenses.length;
 
     expenses.forEach((expense) => {
       const myParticipant = expense.participants?.find(p => p.userId === myUserId);
       if (myParticipant) {
         const net = myParticipant.net || 0;
-        if (net > 0) {
-          totalOwed += net;
-        } else if (net < 0) {
-          totalOwing += Math.abs(net);
+        const share = myParticipant.share || 0;
+        
+        if (expense.isPersonal) {
+          // Personal expenses - just track total spent
+          personalTotal += share;
+        } else {
+          // Shared expenses - track owed/owing
+          if (net > 0) {
+            sharedOwed += net;
+          } else if (net < 0) {
+            sharedOwing += Math.abs(net);
+          }
         }
       }
     });
 
-    const overallBalance = totalOwed - totalOwing;
+    const sharedBalance = sharedOwed - sharedOwing;
     
     return {
-      totalOwed,
-      totalOwing,
-      overallBalance,
+      sharedOwed,
+      sharedOwing,
+      sharedBalance,
+      personalTotal,
       expenseCount,
     };
   }, [expenses, myUserId]);
@@ -156,35 +183,61 @@ function Home() {
   const statsData = useMemo(() => {
     const thisMonth = new Date();
     const lastMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth() - 1, 1);
+    const weekAgo = new Date(thisMonth.getTime() - 7 * 24 * 60 * 60 * 1000);
     
     let thisMonthTotal = 0;
     let lastMonthTotal = 0;
     let personalCount = 0;
+    let personalThisMonth = 0;
+    let personalTotal = 0;
     let settledCount = 0;
+    let pendingCount = 0;
+    let thisWeekCount = 0;
+    let biggestExpense = 0;
+    let myTotalShare = 0;
     
     expenses.forEach(exp => {
       const expDate = new Date(exp.date || exp.createdAt);
       const myPart = exp.participants?.find(p => p.userId === myUserId);
+      const myShare = myPart?.share || 0;
       
       if (expDate.getMonth() === thisMonth.getMonth() && expDate.getFullYear() === thisMonth.getFullYear()) {
-        thisMonthTotal += exp.totalAmount || 0;
+        thisMonthTotal += myShare;
+        if (myShare > biggestExpense) biggestExpense = myShare;
+        if (exp.isPersonal) personalThisMonth += myShare;
       } else if (expDate.getMonth() === lastMonth.getMonth() && expDate.getFullYear() === lastMonth.getFullYear()) {
-        lastMonthTotal += exp.totalAmount || 0;
+        lastMonthTotal += myShare;
       }
       
-      if (exp.isPersonal) personalCount++;
+      if (expDate >= weekAgo) thisWeekCount++;
+      
+      if (exp.isPersonal) {
+        personalCount++;
+        personalTotal += myShare;
+      }
       if (exp.isSettled) settledCount++;
+      else pendingCount++;
+      
+      myTotalShare += myShare;
     });
     
     const monthOverMonth = lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal * 100) : 0;
+    const avgPerExpense = expenses.length > 0 ? myTotalShare / expenses.length : 0;
+    const avgPersonalExpense = personalCount > 0 ? personalTotal / personalCount : 0;
     
     return {
       thisMonthTotal,
       lastMonthTotal,
       monthOverMonth,
       personalCount,
+      personalThisMonth,
+      avgPersonalExpense,
       settledCount,
-      avgPerExpense: expenses.length > 0 ? expenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0) / expenses.length : 0
+      pendingCount,
+      avgPerExpense,
+      biggestExpense,
+      thisWeekCount,
+      totalExpenses: expenses.length
     };
   }, [expenses, myUserId]);
 
@@ -242,26 +295,29 @@ function Home() {
     window.location.href = '/login';
   };
 
-  // Determine balance status
+  // Determine balance status based on shared expenses only
   let balanceStatus = "settled";
   let balanceColor = "var(--muted)";
   let balanceIcon = "✓";
-  if (balanceData.overallBalance > 0) {
+  if (balanceData.sharedBalance > 0) {
     balanceStatus = "positive";
     balanceColor = "#22c55e";
     balanceIcon = "↑";
-  } else if (balanceData.overallBalance < 0) {
+  } else if (balanceData.sharedBalance < 0) {
     balanceStatus = "negative";
     balanceColor = "#ef4444";
     balanceIcon = "↓";
   }
+  
+  // State for balance card scroll position
+  const [balanceCardIndex, setBalanceCardIndex] = React.useState(0);
 
   return (
     <div className="app-shell">
       <SplitzySocket />
 
       <div className="app-bg">
-        <header className="topbar">
+      <header className="topbar">
           <div className="brand">
             <div className="brand-mark">S</div>
             <div className="brand-text">
@@ -301,7 +357,7 @@ function Home() {
               handleOpenChat(t); 
               setSelectedView('dashboard'); 
             }} />
-            <Notification />
+          <Notification />
             <div className="user-pill dropdown" onClick={() => setShowUserMenu(!showUserMenu)}>
               <div className="avatar">
                 {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
@@ -320,12 +376,12 @@ function Home() {
                   Settings (soon)
                 </button>
                 <button onClick={handleLogout} className="user-menu-item danger">
-                  Logout
-                </button>
+            Logout
+          </button>
               </div>
             )}
-          </div>
-        </header>
+        </div>
+      </header>
 
         <div className={`main-grid ${!showRightPanel ? 'right-panel-hidden' : ''}`}>
           {/* Left Panel - Balance & Activity */}
@@ -334,24 +390,71 @@ function Home() {
               <span>Your Balance</span>
             </div>
             
-            {/* Overall Balance Card */}
-            <div className={`balance-card ${balanceStatus}`}>
-              <div className="balance-header">
-                <span className="balance-icon" style={{ color: balanceColor }}>{balanceIcon}</span>
-                <span className="balance-title">Net Balance</span>
-              </div>
-              <div className="balance-amount" style={{ color: balanceColor }}>
-                {balanceData.overallBalance >= 0 ? '+' : '-'}${Math.abs(balanceData.overallBalance).toFixed(2)}
-              </div>
-              <div className="balance-breakdown">
-                <div className="breakdown-item positive">
-                  <span className="bd-label">You're owed</span>
-                  <span className="bd-value">${balanceData.totalOwed.toFixed(2)}</span>
+            {/* Horizontal Scrollable Balance Cards */}
+            <div className="balance-cards-container">
+              <div className="balance-cards-wrapper">
+                <div 
+                  className="balance-cards-scroll" 
+                  style={{ transform: `translateX(-${balanceCardIndex * 100}%)` }}
+                >
+                {/* Shared Balance Card */}
+                <div className={`balance-card-slide ${balanceStatus}`}>
+                  <div className="balance-header">
+                    <span className="balance-icon" style={{ color: balanceColor }}>{balanceIcon}</span>
+                    <span className="balance-title">Shared Balance</span>
+                    <span className="balance-type-badge">👥</span>
+                  </div>
+                  <div className="balance-amount" style={{ color: balanceColor }}>
+                    {safeNumber(balanceData.sharedBalance) >= 0 ? '+' : '-'}${safeFixed(Math.abs(safeNumber(balanceData.sharedBalance)))}
+                  </div>
+                  <div className="balance-breakdown">
+                    <div className="breakdown-item positive">
+                      <span className="bd-label">You're owed</span>
+                      <span className="bd-value">${safeFixed(balanceData.sharedOwed)}</span>
+                    </div>
+                    <div className="breakdown-item negative">
+                      <span className="bd-label">You owe</span>
+                      <span className="bd-value">${safeFixed(balanceData.sharedOwing)}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="breakdown-item negative">
-                  <span className="bd-label">You owe</span>
-                  <span className="bd-value">${balanceData.totalOwing.toFixed(2)}</span>
+                
+                {/* Personal Spending Card */}
+                <div className="balance-card-slide personal">
+                  <div className="balance-header">
+                    <span className="balance-icon" style={{ color: '#818cf8' }}>💰</span>
+                    <span className="balance-title">Personal Spending</span>
+                    <span className="balance-type-badge">👤</span>
+                  </div>
+                  <div className="balance-amount" style={{ color: '#818cf8' }}>
+                    ${safeFixed(balanceData.personalTotal)}
+                  </div>
+                  <div className="balance-breakdown">
+                    <div className="breakdown-item">
+                      <span className="bd-label">This month</span>
+                      <span className="bd-value">${safeFixed(statsData.personalThisMonth, 0)}</span>
+                    </div>
+                    <div className="breakdown-item">
+                      <span className="bd-label">Avg expense</span>
+                      <span className="bd-value">${safeFixed(statsData.avgPersonalExpense, 0)}</span>
+                    </div>
+                  </div>
                 </div>
+              </div>
+              </div>
+              
+              {/* Scroll Indicators */}
+              <div className="balance-dots">
+                <button 
+                  className={`balance-dot ${balanceCardIndex === 0 ? 'active' : ''}`}
+                  onClick={() => setBalanceCardIndex(0)}
+                  aria-label="Shared balance"
+                />
+                <button 
+                  className={`balance-dot ${balanceCardIndex === 1 ? 'active' : ''}`}
+                  onClick={() => setBalanceCardIndex(1)}
+                  aria-label="Personal spending"
+                />
               </div>
             </div>
 
@@ -363,54 +466,55 @@ function Home() {
               </span>
             </div>
             <div className="monthly-summary-card">
-              <div className="monthly-amount">${statsData.thisMonthTotal.toFixed(0)}</div>
+              <div className="monthly-amount">${safeFixed(statsData.thisMonthTotal, 0)}</div>
               <div className="monthly-comparison">
-                {statsData.monthOverMonth !== 0 && (
-                  <span className={`trend-badge ${statsData.monthOverMonth > 0 ? 'up' : 'down'}`}>
-                    {statsData.monthOverMonth > 0 ? '↑' : '↓'} {Math.abs(statsData.monthOverMonth).toFixed(0)}%
+                {safeNumber(statsData.monthOverMonth) !== 0 && (
+                  <span className={`trend-badge ${safeNumber(statsData.monthOverMonth) > 0 ? 'up' : 'down'}`}>
+                    {safeNumber(statsData.monthOverMonth) > 0 ? '↑' : '↓'} {safeFixed(Math.abs(safeNumber(statsData.monthOverMonth)), 0)}%
                   </span>
                 )}
                 <span className="vs-last">vs last month</span>
               </div>
             </div>
 
-            {/* Key Stats Grid */}
-            <div className="stats-grid-compact">
-              <div className="stat-compact">
-                <FiDollarSign size={14} className="stat-icon" />
-                <div className="stat-info">
-                  <span className="stat-num">{balanceData.expenseCount}</span>
-                  <span className="stat-txt">Total</span>
-                </div>
+            {/* Primary KPIs Grid */}
+            <div className="kpi-grid-home">
+              <div className="kpi-item total">
+                <span className="kpi-emoji">📊</span>
+                <span className="kpi-number">{safeNumber(statsData.totalExpenses, 0)}</span>
+                <span className="kpi-text">Total</span>
               </div>
-              <div className="stat-compact">
-                <FiPieChart size={14} className="stat-icon" />
-                <div className="stat-info">
-                  <span className="stat-num">{statsData.personalCount}</span>
-                  <span className="stat-txt">Personal</span>
-                </div>
+              <div className="kpi-item pending">
+                <span className="kpi-emoji">⏳</span>
+                <span className="kpi-number">{safeNumber(statsData.pendingCount, 0)}</span>
+                <span className="kpi-text">Pending</span>
               </div>
-              <div className="stat-compact settled">
-                <span className="stat-num">{statsData.settledCount}</span>
-                <span className="stat-txt">Settled</span>
+              <div className="kpi-item settled">
+                <span className="kpi-emoji">✓</span>
+                <span className="kpi-number">{safeNumber(statsData.settledCount, 0)}</span>
+                <span className="kpi-text">Settled</span>
               </div>
-              <div className="stat-compact">
-                <span className="stat-num">${statsData.avgPerExpense.toFixed(0)}</span>
-                <span className="stat-txt">Avg</span>
+              <div className="kpi-item personal">
+                <span className="kpi-emoji">👤</span>
+                <span className="kpi-number">{safeNumber(statsData.personalCount, 0)}</span>
+                <span className="kpi-text">Personal</span>
               </div>
             </div>
-
-            {/* Quick Actions */}
-            <div className="panel-header spaced">
-              <span>Quick actions</span>
-            </div>
-            <div className="quick-actions">
-              <button className="qa-btn" onClick={() => window.dispatchEvent(new CustomEvent('modalOpened'))}>
-                New expense
-              </button>
-              <button className="qa-btn ghost" onClick={() => setSelectedView('analytics')}>
-                View analytics
-              </button>
+            
+            {/* Secondary KPIs */}
+            <div className="secondary-kpis">
+              <div className="secondary-kpi">
+                <span className="sk-label">Avg per expense</span>
+                <span className="sk-value">${safeFixed(statsData.avgPerExpense, 0)}</span>
+              </div>
+              <div className="secondary-kpi">
+                <span className="sk-label">Biggest this month</span>
+                <span className="sk-value highlight">${safeFixed(statsData.biggestExpense, 0)}</span>
+              </div>
+              <div className="secondary-kpi">
+                <span className="sk-label">This week</span>
+                <span className="sk-value">{safeNumber(statsData.thisWeekCount, 0)} expenses</span>
+              </div>
             </div>
 
             {/* Recent Activity - Always at bottom */}
@@ -452,7 +556,7 @@ function Home() {
                 </div>
               )}
             </div>
-          </aside>
+        </aside>
 
           {/* Center Panel - Expenses / Analytics / Profile */}
           <section className="panel center-panel">
@@ -471,7 +575,7 @@ function Home() {
                 }}
               />
             )}
-          </section>
+        </section>
 
           {/* Right Panel - Friends & Groups */}
           <aside className={`panel sidebar ${!showRightPanel ? 'panel-collapsed' : ''}`}>
@@ -486,13 +590,13 @@ function Home() {
                   >
                     <FiX size={14} />
                   </button>
-                </div>
+          </div>
                 <Friends />
                 <div className="panel-divider" />
                 <Groups />
               </>
             )}
-          </aside>
+        </aside>
         </div>
         {/* Multiple chat windows */}
         <div className="chat-windows-container">
