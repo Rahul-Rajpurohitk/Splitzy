@@ -17,8 +17,10 @@ import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.splitzy.splitzy.model.SplitMethod.*;
@@ -39,6 +41,9 @@ public class ExpenseService {
 
     @Autowired
     private SocketIOServer socketIOServer;
+
+    @Autowired
+    private SqsEventPublisher sqsEventPublisher;
 
     public List<Expense> getExpensesForUser(String userId) {
         logger.debug("Fetching expenses for userId={}", userId);
@@ -534,17 +539,25 @@ public class ExpenseService {
             data.setCreatorId(creatorId);
             data.setCreatorName(creatorName);
 
+            Set<String> targetEmails = new HashSet<>();
+
+            // Direct Socket.IO broadcast (instant, best-effort)
             for (Participant p : expense.getParticipants()) {
                 UserDto user = userDao.findById(p.getUserId()).orElse(null);
                 if (user != null) {
                     String email = user.getEmail();
+                    targetEmails.add(email);
                     socketIOServer.getRoomOperations(email)
                             .sendEvent("expenseEvent", data);
                     logger.info("[ExpenseService] Socket.IO event [EXPENSE_CREATED] sent to room: {}", email);
                 }
             }
+
+            // Also publish to SQS for guaranteed delivery
+            sqsEventPublisher.publishExpenseEvent(targetEmails, data);
+
         } catch (Exception e) {
-            logger.error("[ExpenseService] Error sending Socket.IO expense event: {}", e.getMessage(), e);
+            logger.error("[ExpenseService] Error sending expense event: {}", e.getMessage(), e);
         }
     }
 

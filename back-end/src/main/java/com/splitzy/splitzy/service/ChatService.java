@@ -31,6 +31,7 @@ public class ChatService {
     private final ExpenseDao expenseDao;
     private final SocketIOServer socketIOServer;
     private final ObjectMapper objectMapper;
+    private final SqsEventPublisher sqsEventPublisher;
 
     public ChatService(ChatThreadSqlRepository threadRepo,
                        ChatMessageSqlRepository messageRepo,
@@ -39,7 +40,8 @@ public class ChatService {
                        GroupDao groupDao,
                        ExpenseDao expenseDao,
                        SocketIOServer socketIOServer,
-                       ObjectMapper objectMapper) {
+                       ObjectMapper objectMapper,
+                       SqsEventPublisher sqsEventPublisher) {
         this.threadRepo = threadRepo;
         this.messageRepo = messageRepo;
         this.readRepo = readRepo;
@@ -48,6 +50,7 @@ public class ChatService {
         this.expenseDao = expenseDao;
         this.socketIOServer = socketIOServer;
         this.objectMapper = objectMapper;
+        this.sqsEventPublisher = sqsEventPublisher;
     }
 
     // --- Threads ---
@@ -310,19 +313,20 @@ public class ChatService {
         System.out.println("[ChatService] Broadcasting message to thread:" + threadId);
         System.out.println("[ChatService] Message: id=" + msg.getId() + ", content=" + msg.getContent());
         
-        // Send to thread room (for users who have the chat window open)
+        // Send to thread room (for users who have the chat window open) - instant delivery
         int clientsInRoom = socketIOServer.getRoomOperations("thread:" + threadId).getClients().size();
         System.out.println("[ChatService] Clients in thread room 'thread:" + threadId + "': " + clientsInRoom);
         socketIOServer.getRoomOperations("thread:" + threadId).sendEvent("chat:new_message", msg);
         
         // Also send to each participant's email room (for notification badges)
-        // This ensures users get notified even if they don't have the chat window open
+        Set<String> targetEmails = new HashSet<>();
         threadRepo.findById(threadId).ifPresent(thread -> {
             System.out.println("[ChatService] Thread participants: " + thread.getParticipantIds());
             for (String participantId : thread.getParticipantIds()) {
                 // Don't notify the sender
                 if (!participantId.equals(msg.getSenderId())) {
                     userDao.findById(participantId).ifPresent(user -> {
+                        targetEmails.add(user.getEmail());
                         int emailRoomClients = socketIOServer.getRoomOperations(user.getEmail()).getClients().size();
                         System.out.println("[ChatService] Sending notification to " + user.getEmail() + " (clients: " + emailRoomClients + ")");
                         socketIOServer.getRoomOperations(user.getEmail()).sendEvent("chat:notification", msg);
@@ -330,6 +334,11 @@ public class ChatService {
                 }
             }
         });
+        
+        // Also publish to SQS for guaranteed delivery
+        if (!targetEmails.isEmpty()) {
+            sqsEventPublisher.publishChatNotification(targetEmails, msg);
+        }
     }
 
     private void broadcastRead(String threadId, String userId) {

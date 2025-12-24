@@ -39,6 +39,9 @@ public class FriendService {
     @Autowired
     private SocketIOServer socketIOServer;
 
+    @Autowired
+    private SqsEventPublisher sqsEventPublisher;
+
     public List<FriendDTO> getFriendDetails(String userId) {
         // 1) Load the main user
         UserDto user = userDao.findById(userId)
@@ -96,6 +99,9 @@ public class FriendService {
             data.setReceiverId(receiverId);
             socketIOServer.getRoomOperations(receiver.getEmail()).sendEvent("friendRequest", data);
             logger.info("[FriendService] Socket.IO event sent to room: {}", receiver.getEmail());
+            
+            // Also publish to SQS for guaranteed delivery
+            sqsEventPublisher.publishFriendRequestEvent(receiver.getEmail(), data);
         } catch (Exception e) {
             logger.error("[FriendService] Error sending WebSocket message: ", e);
         }
