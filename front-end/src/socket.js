@@ -1,18 +1,37 @@
 // src/socket.js
 import { io } from 'socket.io-client';
 
+// Determine Socket.IO server URL based on environment
+const getSocketUrl = () => {
+  // In production, use the same domain with /socket.io path
+  if (process.env.NODE_ENV === 'production') {
+    // Use HTTPS WebSocket through CloudFront
+    return process.env.REACT_APP_SOCKET_URL || 'https://splitzy.xyz';
+  }
+  // In development, connect to local Socket.IO server
+  return 'http://localhost:9092';
+};
+
 const getSocket = () => {
   const token = localStorage.getItem('splitzyToken');
-  return io("http://localhost:9092", {
+  const socketUrl = getSocketUrl();
+  
+  console.log('Socket.IO connecting to:', socketUrl);
+  
+  return io(socketUrl, {
+    path: '/socket.io/',
     withCredentials: true,
     // socket.io-client 4.x uses 'auth' for token-based authentication
     auth: { token },
-    // Fallback query for backward compatibility
+    // Fallback query for backward compatibility with netty-socketio
     query: { token },
-    transports: ['websocket', 'polling'],
+    // Use polling first for better compatibility with netty-socketio 2.x
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
+    // Force Socket.IO v2 protocol for netty-socketio compatibility
+    forceNew: true,
   });
 };
 
