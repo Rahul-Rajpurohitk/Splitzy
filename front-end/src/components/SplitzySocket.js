@@ -48,7 +48,14 @@ function SplitzySocket() {
       }));
     });
 
-
+    // Chat notification (sent to user's email room when someone messages them)
+    socket.on("chat:notification", (data) => {
+      console.log("Socket.IO chat:notification event received:", data);
+      dispatch(setLastEvent({
+        eventType: "CHAT_NOTIFICATION",
+        payload: data
+      }));
+    });
 
     // Cleanup: remove event listeners on unmount
     return () => {
@@ -57,6 +64,7 @@ function SplitzySocket() {
       socket.off("friendRequest");
       socket.off("expenseEvent");
       socket.off("groupInvite");
+      socket.off("chat:notification");
     };
   }, [dispatch]);
 

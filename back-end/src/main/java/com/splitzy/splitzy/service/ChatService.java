@@ -276,7 +276,22 @@ public class ChatService {
     // --- Broadcasting helpers ---
     private void broadcastMessage(String threadId, ChatMessageSql msg) {
         if (socketIOServer == null) return;
+        
+        // Send to thread room (for users who have the chat window open)
         socketIOServer.getRoomOperations("thread:" + threadId).sendEvent("chat:new_message", msg);
+        
+        // Also send to each participant's email room (for notification badges)
+        // This ensures users get notified even if they don't have the chat window open
+        threadRepo.findById(threadId).ifPresent(thread -> {
+            for (String participantId : thread.getParticipantIds()) {
+                // Don't notify the sender
+                if (!participantId.equals(msg.getSenderId())) {
+                    userDao.findById(participantId).ifPresent(user -> {
+                        socketIOServer.getRoomOperations(user.getEmail()).sendEvent("chat:notification", msg);
+                    });
+                }
+            }
+        });
     }
 
     private void broadcastRead(String threadId, String userId) {

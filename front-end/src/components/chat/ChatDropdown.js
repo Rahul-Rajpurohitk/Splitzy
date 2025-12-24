@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useSelector } from "react-redux";
 import { FiMessageSquare } from "react-icons/fi";
 import axios from "axios";
 
@@ -8,9 +9,27 @@ function ChatDropdown({ onSelectThread }) {
   const [friends, setFriends] = useState([]);
   const [groups, setGroups] = useState([]);
   const [activeTab, setActiveTab] = useState("friends"); // friends | groups
+  const [unreadCount, setUnreadCount] = useState(0);
   const token = localStorage.getItem("splitzyToken");
   const myUserId = localStorage.getItem("myUserId");
   const dropdownRef = useRef(null);
+  
+  // Listen for chat notifications from socket
+  const lastEvent = useSelector((state) => state.socket.lastEvent);
+  
+  useEffect(() => {
+    if (lastEvent?.eventType === "CHAT_NOTIFICATION") {
+      console.log("[ChatDropdown] Chat notification received:", lastEvent.payload);
+      setUnreadCount(prev => prev + 1);
+    }
+  }, [lastEvent]);
+  
+  // Clear unread when opening the dropdown
+  useEffect(() => {
+    if (open) {
+      setUnreadCount(0);
+    }
+  }, [open]);
 
   const fetchThreads = async () => {
     setLoading(true);
@@ -123,7 +142,7 @@ function ChatDropdown({ onSelectThread }) {
   return (
     <div className="chat-dropdown" ref={dropdownRef}>
       <button
-        className="nav-icon-pill"
+        className={`nav-icon-pill ${unreadCount > 0 ? 'has-unread' : ''}`}
         title="Messages"
         onClick={() => {
           if (!open) window.dispatchEvent(new CustomEvent("modalOpened"));
@@ -132,6 +151,7 @@ function ChatDropdown({ onSelectThread }) {
       >
         <FiMessageSquare size={16} />
         <span className="nav-icon-text">Messages</span>
+        {unreadCount > 0 && <span className="chat-badge">{unreadCount}</span>}
       </button>
       {open && (
         <div className="chat-menu">

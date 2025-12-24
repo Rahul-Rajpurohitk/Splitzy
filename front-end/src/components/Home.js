@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
+import { fetchExpensesThunk } from '../features/expense/expenseSlice';
 import Friends from './Friends';
 import Notification from './Notification';
 import SplitzySocket from './SplitzySocket';
@@ -80,9 +81,11 @@ function safeFixed(value, decimals = 2) {
 
 function Home() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const myUserId = localStorage.getItem('myUserId');
   const username = localStorage.getItem('myUserName');
   const avatarUrl = localStorage.getItem('myUserAvatar') || '';
+  const token = localStorage.getItem('splitzyToken');
 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [selectedView, setSelectedView] = useState('dashboard');
@@ -92,6 +95,18 @@ function Home() {
   // Recent activity state
   const [recentActivity, setRecentActivity] = useState([]);
   const [activityExpanded, setActivityExpanded] = useState(true);
+  
+  // Listen for socket events to update recent activity in real-time
+  const lastEvent = useSelector((state) => state.socket.lastEvent);
+  
+  useEffect(() => {
+    if (!lastEvent) return;
+    // Re-fetch expenses when a new expense is created (updates recent activity)
+    if (lastEvent.eventType === 'EXPENSE_EVENT' && lastEvent.payload?.type === 'EXPENSE_CREATED') {
+      console.log('[Home] Expense event received, refreshing expenses for recent activity');
+      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+    }
+  }, [lastEvent, dispatch, myUserId, token]);
 
   // Auto-hide right panel when switching to analytics
   useEffect(() => {
