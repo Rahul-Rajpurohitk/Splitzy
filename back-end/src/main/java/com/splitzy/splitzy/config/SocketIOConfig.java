@@ -84,7 +84,9 @@ public class SocketIOConfig {
         config.setPort(9092);
 
         // Set allowed origins for CORS
-        config.setOrigin("http://localhost:3000");
+        // Security note: Real security is JWT token validation - without valid token, users can't connect
+        // In production, we need to allow the CloudFront domain
+        config.setOrigin("https://splitzy.xyz");
         config.setAllowCustomRequests(true);
 
         // Configure Jackson with Java 8 date/time support
