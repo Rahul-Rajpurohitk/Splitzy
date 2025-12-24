@@ -57,16 +57,33 @@ public class ChatService {
         UserDto user = userDao.findById(userId).orElseThrow(() -> new RuntimeException("User not found: " + userId));
         UserDto friend = userDao.findById(friendId).orElseThrow(() -> new RuntimeException("Friend not found: " + friendId));
         
-        boolean isFriend = (user.getFriendIds() != null && user.getFriendIds().contains(friendId)) ||
-                          (friend.getFriendIds() != null && friend.getFriendIds().contains(userId));
+        // Initialize friendIds sets if null
+        if (user.getFriendIds() == null) user.setFriendIds(new java.util.HashSet<>());
+        if (friend.getFriendIds() == null) friend.setFriendIds(new java.util.HashSet<>());
+        
+        boolean userHasFriend = user.getFriendIds().contains(friendId);
+        boolean friendHasUser = friend.getFriendIds().contains(userId);
         
         System.out.println("[ChatService] createOrGetP2P: userId=" + userId + ", friendId=" + friendId);
-        System.out.println("[ChatService] User friendIds: " + user.getFriendIds());
-        System.out.println("[ChatService] Friend friendIds: " + friend.getFriendIds());
-        System.out.println("[ChatService] isFriend: " + isFriend);
+        System.out.println("[ChatService] userHasFriend: " + userHasFriend + ", friendHasUser: " + friendHasUser);
+        
+        // If friendship is stored in only one direction, repair it
+        if (userHasFriend && !friendHasUser) {
+            System.out.println("[ChatService] Repairing friendship: adding " + userId + " to friend's list");
+            friend.getFriendIds().add(userId);
+            userDao.save(friend);
+        } else if (!userHasFriend && friendHasUser) {
+            System.out.println("[ChatService] Repairing friendship: adding " + friendId + " to user's list");
+            user.getFriendIds().add(friendId);
+            userDao.save(user);
+        }
+        
+        boolean isFriend = userHasFriend || friendHasUser;
         
         if (!isFriend) {
-            throw new RuntimeException("Not friends - user " + userId + " and " + friendId + " are not connected");
+            // Check if there's an accepted friend request between them
+            System.out.println("[ChatService] No friendship found, checking for accepted friend requests...");
+            throw new RuntimeException("Not friends - user " + userId + " and " + friendId + " are not connected. Please add each other as friends first.");
         }
 
         // Try to find existing
