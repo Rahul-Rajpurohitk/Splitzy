@@ -14,20 +14,21 @@ const getSocketUrl = () => {
 const socketUrl = getSocketUrl();
 console.log('Socket.IO URL:', socketUrl);
 
-// Create single socket instance - WebSocket ONLY for real-time
+// Create single socket instance
 const socket = io(socketUrl, {
   path: '/socket.io/',
   withCredentials: true,
   auth: { token: localStorage.getItem('splitzyToken') },
   query: { token: localStorage.getItem('splitzyToken') },
-  // WebSocket ONLY - no polling fallback (causes session issues with CloudFront)
-  transports: ['websocket'],
-  upgrade: false,
+  // Start with polling, then upgrade to WebSocket for stability
+  transports: ['polling', 'websocket'],
+  upgrade: true,
   reconnection: true,
-  reconnectionAttempts: 15,
+  reconnectionAttempts: Infinity, // Keep trying forever
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
-  timeout: 30000,
+  randomizationFactor: 0.5,
+  timeout: 20000,
   autoConnect: false,
 });
 
