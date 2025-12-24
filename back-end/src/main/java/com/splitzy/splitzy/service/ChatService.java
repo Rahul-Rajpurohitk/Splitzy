@@ -53,10 +53,20 @@ public class ChatService {
     // --- Threads ---
     @Transactional
     public ChatThreadSql createOrGetP2P(String userId, String friendId) {
-        // Verify friendship
-        UserDto user = userDao.findById(userId).orElseThrow();
-        if (!user.getFriendIds().contains(friendId)) {
-            throw new RuntimeException("Not friends");
+        // Verify friendship - check both directions since friendship might only be stored in one direction
+        UserDto user = userDao.findById(userId).orElseThrow(() -> new RuntimeException("User not found: " + userId));
+        UserDto friend = userDao.findById(friendId).orElseThrow(() -> new RuntimeException("Friend not found: " + friendId));
+        
+        boolean isFriend = (user.getFriendIds() != null && user.getFriendIds().contains(friendId)) ||
+                          (friend.getFriendIds() != null && friend.getFriendIds().contains(userId));
+        
+        System.out.println("[ChatService] createOrGetP2P: userId=" + userId + ", friendId=" + friendId);
+        System.out.println("[ChatService] User friendIds: " + user.getFriendIds());
+        System.out.println("[ChatService] Friend friendIds: " + friend.getFriendIds());
+        System.out.println("[ChatService] isFriend: " + isFriend);
+        
+        if (!isFriend) {
+            throw new RuntimeException("Not friends - user " + userId + " and " + friendId + " are not connected");
         }
 
         // Try to find existing
@@ -275,18 +285,29 @@ public class ChatService {
 
     // --- Broadcasting helpers ---
     private void broadcastMessage(String threadId, ChatMessageSql msg) {
-        if (socketIOServer == null) return;
+        if (socketIOServer == null) {
+            System.out.println("[ChatService] socketIOServer is null, cannot broadcast!");
+            return;
+        }
+        
+        System.out.println("[ChatService] Broadcasting message to thread:" + threadId);
+        System.out.println("[ChatService] Message: id=" + msg.getId() + ", content=" + msg.getContent());
         
         // Send to thread room (for users who have the chat window open)
+        int clientsInRoom = socketIOServer.getRoomOperations("thread:" + threadId).getClients().size();
+        System.out.println("[ChatService] Clients in thread room 'thread:" + threadId + "': " + clientsInRoom);
         socketIOServer.getRoomOperations("thread:" + threadId).sendEvent("chat:new_message", msg);
         
         // Also send to each participant's email room (for notification badges)
         // This ensures users get notified even if they don't have the chat window open
         threadRepo.findById(threadId).ifPresent(thread -> {
+            System.out.println("[ChatService] Thread participants: " + thread.getParticipantIds());
             for (String participantId : thread.getParticipantIds()) {
                 // Don't notify the sender
                 if (!participantId.equals(msg.getSenderId())) {
                     userDao.findById(participantId).ifPresent(user -> {
+                        int emailRoomClients = socketIOServer.getRoomOperations(user.getEmail()).getClients().size();
+                        System.out.println("[ChatService] Sending notification to " + user.getEmail() + " (clients: " + emailRoomClients + ")");
                         socketIOServer.getRoomOperations(user.getEmail()).sendEvent("chat:notification", msg);
                     });
                 }
