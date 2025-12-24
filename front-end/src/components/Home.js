@@ -107,6 +107,18 @@ function Home() {
       dispatch(fetchExpensesThunk({ userId: myUserId, token }));
     }
   }, [lastEvent, dispatch, myUserId, token]);
+  
+  // RELIABILITY: Periodic sync every 30 seconds to catch missed socket events
+  useEffect(() => {
+    if (!myUserId || !token) return;
+    
+    const syncInterval = setInterval(() => {
+      console.log('[Home] Periodic sync - fetching latest data');
+      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(syncInterval);
+  }, [myUserId, token, dispatch]);
 
   // Auto-hide right panel when switching to analytics
   useEffect(() => {

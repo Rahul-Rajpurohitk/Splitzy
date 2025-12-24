@@ -103,6 +103,18 @@ function Notification() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+  
+  // RELIABILITY: Periodic sync every 30 seconds to catch missed socket events
+  useEffect(() => {
+    if (!userId || !token) return;
+    
+    const syncInterval = setInterval(() => {
+      console.log('[Notification] Periodic sync - fetching latest notifications');
+      fetchNotifications();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(syncInterval);
+  }, [userId, token, fetchNotifications]);
 
   // Whenever lastEvent changes, decide if we need to fetch again
   useEffect(() => {

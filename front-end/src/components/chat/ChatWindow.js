@@ -100,6 +100,33 @@ function ChatWindow({ thread, minimized, rightPosition = 20, onClose, onMinimize
       socket.off("chat:new_message", handleNewMessage);
     };
   }, [thread]);
+  
+  // RELIABILITY: Periodic sync every 10 seconds to catch missed socket events
+  useEffect(() => {
+    if (!thread || minimized) return;
+    
+    const syncInterval = setInterval(async () => {
+      try {
+        const res = await axios.get(
+          `${process.env.REACT_APP_API_URL}/chat/messages/${thread.id}?page=0&size=50`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const newMessages = res.data.reverse();
+        setMessages((prev) => {
+          // Only update if there are new messages
+          if (newMessages.length !== prev.length) {
+            console.log('[ChatWindow] Periodic sync found new messages');
+            return newMessages;
+          }
+          return prev;
+        });
+      } catch (e) {
+        console.error('[ChatWindow] Periodic sync failed', e);
+      }
+    }, 10000); // 10 seconds for chat
+    
+    return () => clearInterval(syncInterval);
+  }, [thread, token, minimized]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
