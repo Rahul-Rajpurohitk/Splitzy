@@ -20,15 +20,16 @@ const socket = io(socketUrl, {
   withCredentials: true,
   auth: { token: localStorage.getItem('splitzyToken') },
   query: { token: localStorage.getItem('splitzyToken') },
-  // Use only polling for compatibility with netty-socketio
-  // WebSocket upgrade causes disconnect/reconnect loops
-  transports: ['polling'],
-  upgrade: false,
+  // Try WebSocket first (CloudFront supports it), then polling as fallback
+  transports: ['websocket', 'polling'],
+  upgrade: true,
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 2000,
-  timeout: 10000,
+  timeout: 20000,
   autoConnect: false,
+  // Force new connection on reconnect to avoid stale sessions
+  forceNew: false,
 });
 
 // Basic connection logging
