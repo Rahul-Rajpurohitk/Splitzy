@@ -3,40 +3,29 @@ import { io } from 'socket.io-client';
 
 // Determine Socket.IO server URL based on environment
 const getSocketUrl = () => {
-  // In production, use the same domain with /socket.io path
   if (process.env.NODE_ENV === 'production') {
-    // Use HTTPS WebSocket through CloudFront
     return process.env.REACT_APP_SOCKET_URL || 'https://splitzy.xyz';
   }
-  // In development, connect to local Socket.IO server
   return 'http://localhost:9092';
 };
 
-const getSocket = () => {
-  const token = localStorage.getItem('splitzyToken');
-  const socketUrl = getSocketUrl();
-  
-  console.log('Socket.IO connecting to:', socketUrl);
-  
-  return io(socketUrl, {
-    path: '/socket.io/',
-    withCredentials: true,
-    // socket.io-client 4.x uses 'auth' for token-based authentication
-    auth: { token },
-    // Fallback query for backward compatibility with netty-socketio
-    query: { token },
-    // Use polling first for better compatibility with netty-socketio 2.x
-    transports: ['polling', 'websocket'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    // Force Socket.IO v2 protocol for netty-socketio compatibility
-    forceNew: true,
-  });
-};
+const socketUrl = getSocketUrl();
+console.log('Socket.IO URL:', socketUrl);
 
-const socket = getSocket();
+// Create single socket instance
+const socket = io(socketUrl, {
+  path: '/socket.io/',
+  withCredentials: true,
+  auth: { token: localStorage.getItem('splitzyToken') },
+  query: { token: localStorage.getItem('splitzyToken') },
+  transports: ['polling', 'websocket'],
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
+  autoConnect: false, // Don't auto-connect, we'll connect after setting auth
+});
 
+// Basic connection logging
 socket.on("connect", () => {
   console.log("Socket.IO connected, id:", socket.id);
 });
@@ -49,10 +38,37 @@ socket.on("connect_error", (error) => {
   console.log("Socket.IO connection error:", error.message);
 });
 
-/* Listen for friend request events
-socket.on("friendRequest", (data) => {
-  console.log("Received friend request event:", data);
-  // Here you can dispatch an action to Redux or update your UI accordingly
-}); */
+// Reconnect socket with new token (call after login)
+export const reconnectSocket = () => {
+  const token = localStorage.getItem('splitzyToken');
+  console.log('Reconnecting socket with token:', token ? 'present' : 'null');
+  
+  // Disconnect first if connected
+  if (socket.connected) {
+    socket.disconnect();
+  }
+  
+  // Update auth with new token
+  socket.auth = { token };
+  socket.io.opts.query = { token };
+  
+  // Reconnect
+  socket.connect();
+  
+  return socket;
+};
+
+// Disconnect socket (call on logout)
+export const disconnectSocket = () => {
+  console.log('Disconnecting socket...');
+  socket.disconnect();
+};
+
+// Initial connection if token exists
+const initialToken = localStorage.getItem('splitzyToken');
+if (initialToken) {
+  console.log('Initial token found, connecting socket...');
+  socket.connect();
+}
 
 export default socket;

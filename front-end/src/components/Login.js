@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import '../login.css';
 import AuthLayout from './auth/AuthLayout';
+import { reconnectSocket } from '../socket';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -47,6 +48,9 @@ function Login() {
         if(data.friendIds){
           localStorage.setItem('myFriendIds', JSON.stringify(data.friendIds));
         }
+
+        // Reconnect socket with new token
+        reconnectSocket();
 
         // Navigate to /home
         navigate('/home');

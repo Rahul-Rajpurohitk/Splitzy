@@ -5,7 +5,7 @@ import axios from 'axios';
 import Friends from './Friends';
 import Notification from './Notification';
 import SplitzySocket from './SplitzySocket';
-import socket from '../socket';
+import { disconnectSocket } from '../socket';
 import ExpenseCenter from './expenses/ExpenseCenter';
 import '../home.css';
 import Groups from './Groups';
@@ -287,7 +287,7 @@ function Home() {
   }, [navigate]);
 
   const handleLogout = () => {
-    socket.disconnect();
+    disconnectSocket();
     localStorage.removeItem('splitzyToken');
     localStorage.removeItem('myUserId');
     localStorage.removeItem('myUserName');

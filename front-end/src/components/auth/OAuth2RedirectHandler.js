@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
+import { reconnectSocket } from '../../socket';
 
 const OAuth2RedirectHandler = () => {
     const navigate = useNavigate();
@@ -31,6 +32,9 @@ const OAuth2RedirectHandler = () => {
                     if (data.friendIds) {
                         localStorage.setItem('myFriendIds', JSON.stringify(data.friendIds));
                     }
+
+                    // Reconnect socket with new token
+                    reconnectSocket();
 
                     // Redirect to home
                     navigate('/home');
