@@ -4,7 +4,9 @@ import { io } from 'socket.io-client';
 // Determine Socket.IO server URL based on environment
 const getSocketUrl = () => {
   if (process.env.NODE_ENV === 'production') {
-    return process.env.REACT_APP_SOCKET_URL || 'https://splitzy.xyz';
+    // ALWAYS use CloudFront URL in production - Socket.IO goes through CloudFront proxy
+    // Do NOT use direct EC2 connection (causes mixed content errors)
+    return 'https://splitzy.xyz';
   }
   return 'http://localhost:9092';
 };
