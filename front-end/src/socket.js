@@ -18,11 +18,15 @@ const socket = io(socketUrl, {
   withCredentials: true,
   auth: { token: localStorage.getItem('splitzyToken') },
   query: { token: localStorage.getItem('splitzyToken') },
-  transports: ['polling', 'websocket'],
+  // Use only polling for compatibility with netty-socketio
+  // WebSocket upgrade causes disconnect/reconnect loops
+  transports: ['polling'],
+  upgrade: false,
   reconnection: true,
   reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
-  autoConnect: false, // Don't auto-connect, we'll connect after setting auth
+  reconnectionDelay: 2000,
+  timeout: 10000,
+  autoConnect: false,
 });
 
 // Basic connection logging
