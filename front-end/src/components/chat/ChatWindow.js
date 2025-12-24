@@ -244,8 +244,18 @@ function ChatWindow({ thread, minimized, rightPosition = 20, onClose, onMinimize
           </div>
         )}
         {!loading &&
-          messages.map((m) => {
+          messages.map((m, idx) => {
             const isMe = m.senderId === myUserId;
+            // Debug: Log first message comparison to help diagnose alignment issues
+            if (idx === 0) {
+              console.log('[ChatWindow] Message alignment debug:', { 
+                myUserId, 
+                senderId: m.senderId, 
+                senderName: m.senderName,
+                isMe,
+                match: m.senderId === myUserId 
+              });
+            }
             const isExpenseShare = m.messageType === "EXPENSE_SHARE";
             const hasReply = m.replyToId && m.replyToContent;
             

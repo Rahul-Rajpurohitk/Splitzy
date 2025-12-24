@@ -14,6 +14,13 @@ const OAuth2RedirectHandler = () => {
             const error = params.get('error');
 
             if (token) {
+                // Clear old session data first to prevent stale data issues
+                localStorage.removeItem('splitzyToken');
+                localStorage.removeItem('myUserId');
+                localStorage.removeItem('myUserName');
+                localStorage.removeItem('myUserEmail');
+                localStorage.removeItem('myFriendIds');
+                
                 // Store token
                 localStorage.setItem('splitzyToken', token);
 

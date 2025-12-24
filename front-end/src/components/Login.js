@@ -39,6 +39,13 @@ function Login() {
         // If there's an error field, show it
         setError(data.error);
       } else if (data.token) {
+        // Clear old session data first to prevent stale data issues
+        localStorage.removeItem('splitzyToken');
+        localStorage.removeItem('myUserId');
+        localStorage.removeItem('myUserName');
+        localStorage.removeItem('myUserEmail');
+        localStorage.removeItem('myFriendIds');
+        
         // Store token + user details
         localStorage.setItem('splitzyToken', data.token);
         localStorage.setItem('myUserId', data.id);
