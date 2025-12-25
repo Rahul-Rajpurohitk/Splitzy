@@ -212,6 +212,54 @@ public class AuthController {
     }
 
     /**
+     * Debug endpoint to help diagnose user ID mismatches.
+     * Returns info about the authenticated user and their friends.
+     */
+    @GetMapping("/debug/user-info")
+    public ResponseEntity<Map<String, Object>> debugUserInfo(Authentication authentication) {
+        String email = authentication.getName();
+        logger.info("[DEBUG] Checking user info for email: {}", email);
+        
+        UserDto user = userDao.findByEmail(email).orElse(null);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("authEmail", email);
+        
+        if (user != null) {
+            response.put("userId", user.getId());
+            response.put("userName", user.getName());
+            response.put("userEmail", user.getEmail());
+            response.put("friendIds", user.getFriendIds());
+            
+            // Get friend details
+            java.util.List<Map<String, String>> friends = new java.util.ArrayList<>();
+            if (user.getFriendIds() != null) {
+                for (String friendId : user.getFriendIds()) {
+                    UserDto friend = userDao.findById(friendId).orElse(null);
+                    if (friend != null) {
+                        Map<String, String> friendInfo = new HashMap<>();
+                        friendInfo.put("id", friend.getId());
+                        friendInfo.put("name", friend.getName());
+                        friendInfo.put("email", friend.getEmail());
+                        friends.add(friendInfo);
+                    } else {
+                        Map<String, String> friendInfo = new HashMap<>();
+                        friendInfo.put("id", friendId);
+                        friendInfo.put("name", "NOT_FOUND");
+                        friendInfo.put("email", "NOT_FOUND");
+                        friends.add(friendInfo);
+                    }
+                }
+            }
+            response.put("friends", friends);
+        } else {
+            response.put("error", "User not found in database");
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Test-only endpoint to create users without email verification.
      * Only available in non-production profiles.
      */
