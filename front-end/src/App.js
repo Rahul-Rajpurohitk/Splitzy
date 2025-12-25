@@ -4,6 +4,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import OAuth2RedirectHandler from './components/auth/OAuth2RedirectHandler';
 import ErrorBoundary from './components/ErrorBoundary';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import './login.css';
 import './home.css';
 import Home from './components/Home';
@@ -24,6 +25,8 @@ function App() {
           {/* Protected Home */}
           <Route path="/home" element={<Home />} />
         </Routes>
+        {/* PWA Install Prompt - shows when app can be installed */}
+        <PWAInstallPrompt />
       </BrowserRouter>
     </ErrorBoundary>
   );
