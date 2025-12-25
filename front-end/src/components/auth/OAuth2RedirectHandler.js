@@ -33,6 +33,8 @@ const OAuth2RedirectHandler = () => {
                     });
 
                     const data = response.data;
+                    console.log('[OAuth2] User data from /auth/me:', data);
+                    console.log('[OAuth2] Storing myUserId:', data.id);
                     localStorage.setItem('myUserId', data.id);
                     localStorage.setItem('myUserName', data.name);
                     localStorage.setItem('myUserEmail', data.email);
