@@ -3087,15 +3087,17 @@ html {
 .expense-card-wrapper {
   position: relative;
   margin-bottom: 10px;
+  overflow: hidden;
+  border-radius: 14px;
 }
 
-/* Swipe actions - hidden on desktop */
+/* Swipe actions - hidden behind the card */
 .swipe-actions {
   position: absolute;
   right: 0;
   top: 0;
   bottom: 0;
-  display: none; /* Hidden by default */
+  display: none; /* Hidden by default on desktop */
   align-items: stretch;
   z-index: 1;
 }
@@ -3120,6 +3122,13 @@ html {
 
 .swipe-action-btn.delete {
   background: #ef4444;
+}
+
+/* Expense card positioned above swipe actions */
+.expense-card {
+  position: relative;
+  z-index: 2;
+  background: var(--card);
 }
 
 /* Settled inline badge */
@@ -4585,27 +4594,25 @@ html {
     display: flex !important;
   }
   
-  /* Swipe actions revealed on left swipe */
-  .expense-card-wrapper {
-    overflow: hidden;
-    border-radius: 14px;
-  }
-  
+  /* Swipe actions revealed on left swipe - initially hidden */
   .swipe-actions {
-    display: flex; /* Show on mobile */
+    display: flex; /* Show on mobile - but hidden by card */
   }
   
-  /* Make expense card swipeable */
+  /* Make expense card swipeable - SOLID background */
   .expense-card {
-    position: relative;
-    z-index: 2;
-    background: var(--card);
+    background: rgb(22, 33, 55) !important; /* Solid dark background */
     transition: transform 0.15s ease-out;
     will-change: transform;
   }
   
   .expense-card.swiping {
     transition: none;
+  }
+  
+  /* When card is swiped, show actions */
+  .expense-card-wrapper.swiped .swipe-actions {
+    display: flex;
   }
   
   /* Mobile dropdown menu */

@@ -244,8 +244,9 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   const categoryIcon = getCategoryIcon(expense.category, expense.description);
 
   return (
-    <div className="expense-card-wrapper" ref={cardRef}>
+    <div className={`expense-card-wrapper ${swipeOffset > 0 ? 'swiped' : ''}`} ref={cardRef}>
       {/* Swipe action buttons (revealed on swipe left) */}
+      {swipeOffset > 0 && (
       <div className="swipe-actions">
         {!expense.isSettled && myNet !== 0 && (
           <button 
@@ -264,6 +265,7 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
           <span>Delete</span>
         </button>
       </div>
+      )}
 
       {/* Main card (swipeable) */}
       <div 
