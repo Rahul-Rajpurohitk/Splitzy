@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import '../login.css';
 import AuthLayout from './auth/AuthLayout';
 import { reconnectSocket } from '../socket';
+import { clearAllCache } from '../services/api';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -39,10 +40,11 @@ function Login() {
         // If there's an error field, show it
         setError(data.error);
       } else if (data.token) {
-        // CRITICAL: Clear ALL storage to prevent tenant-level data leakage
-        console.log('[Login] Clearing ALL localStorage before storing new user data');
+        // CRITICAL: Clear ALL storage and caches to prevent tenant-level data leakage
+        console.log('[Login] Clearing ALL storage and caches before storing new user data');
         localStorage.clear();
         sessionStorage.clear();
+        clearAllCache();
         
         // Store token + user details
         localStorage.setItem('splitzyToken', data.token);

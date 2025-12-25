@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { reconnectSocket } from '../../socket';
+import { clearAllCache } from '../../services/api';
 
 const OAuth2RedirectHandler = () => {
     const navigate = useNavigate();
@@ -14,21 +15,29 @@ const OAuth2RedirectHandler = () => {
             const error = params.get('error');
 
             if (token) {
-                // CRITICAL: Clear ALL localStorage to prevent tenant-level data leakage
-                console.log('[OAuth2] Clearing ALL localStorage before storing new user data');
+                // CRITICAL: Clear ALL storage and caches to prevent tenant-level data leakage
+                console.log('[OAuth2] Clearing ALL storage and caches before storing new user data');
                 localStorage.clear();
-                
-                // Also clear session storage
                 sessionStorage.clear();
+                
+                // Clear API memory cache to prevent stale user data
+                clearAllCache();
                 
                 // Store token
                 localStorage.setItem('splitzyToken', token);
+                console.log('[OAuth2] Token stored, about to call /auth/me');
 
                 try {
-                    // Fetch user details
+                    // Fetch user details with cache-busting
                     const response = await axios.get(`${process.env.REACT_APP_API_URL}/auth/me`, {
                         headers: {
-                            Authorization: `Bearer ${token}`
+                            Authorization: `Bearer ${token}`,
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        },
+                        params: {
+                            _t: Date.now() // Cache-busting parameter
                         }
                     });
 
