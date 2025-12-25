@@ -241,6 +241,14 @@ function AddExpenseModal({ onClose, onSave }) {
   const [splitError, setSplitError] = useState("");
   const [fullOwe, setFullOwe] = useState("you"); // "you" means creator owes full; "other" means the other participant owes full
   const [isPersonal, setIsPersonal] = useState(false); // Personal expense - not shared with others
+  
+  // Prevent background scroll on mobile when modal is open
+  useEffect(() => {
+    document.body.classList.add('modal-open');
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, []);
 
 
     // --------------------------

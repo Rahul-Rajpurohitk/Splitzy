@@ -337,18 +337,21 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
             className="expense-more-btn mobile-only"
             onClick={(e) => { e.stopPropagation(); setShowMobileMenu(!showMobileMenu); }}
           >
-            <FiMoreVertical size={16} />
+            <FiMoreVertical size={18} />
           </button>
 
-          {/* Expand indicator */}
-          <div className="expense-expand">
+          {/* Expand indicator - Desktop only */}
+          <div className="expense-expand desktop-only">
             {isExpanded ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
           </div>
         </div>
 
-        {/* Mobile dropdown menu */}
+        {/* Mobile dropdown menu - All actions in one place */}
         {showMobileMenu && (
           <div className="expense-mobile-menu" onClick={(e) => e.stopPropagation()}>
+            <button onClick={(e) => { e.stopPropagation(); setShowMobileMenu(false); onToggleExpand(); }}>
+              <FiChevronDown size={14} /> {isExpanded ? 'Hide Details' : 'View Details'}
+            </button>
             <button onClick={(e) => { handleShareClick(e); setShowMobileMenu(false); }}>
               <FiShare2 size={14} /> Share
             </button>
@@ -424,8 +427,8 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
             </div>
           )}
 
-          {/* Actions */}
-          <div className="expense-actions">
+          {/* Actions - Desktop only (mobile uses dropdown menu) */}
+          <div className="expense-actions desktop-only">
             {!expense.isSettled && myNet !== 0 && (
               <button 
                 className="expense-action-btn settle"

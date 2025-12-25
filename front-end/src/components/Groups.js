@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import AddGroupModal from './AddGroupModal';
 import { useSelector, useDispatch } from "react-redux";
 import axios from 'axios';
+import { FiMessageCircle } from 'react-icons/fi';
 import { setExpenseFilter } from '../features/expense/expenseSlice';  // New action
 
-const Groups = () => {
+const Groups = ({ onOpenChat }) => {
   const [showModal, setShowModal] = useState(false);
   const [groups, setGroups] = useState([]);
 
@@ -13,6 +14,25 @@ const Groups = () => {
   const lastEvent = useSelector((state) => state.socket.lastEvent);
   const token = localStorage.getItem('splitzyToken');
   const currentUserId = localStorage.getItem('myUserId');
+  
+  // Handle opening group chat
+  const handleOpenGroupChat = async (group, e) => {
+    e.stopPropagation();
+    if (!onOpenChat) return;
+    
+    try {
+      // Create or get existing group thread
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/chat/group/${group.id}/thread`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const thread = response.data;
+      onOpenChat(thread);
+    } catch (error) {
+      console.error('Error opening group chat:', error);
+    }
+  };
 
   const fetchGroups = async () => {
     try {
@@ -65,12 +85,23 @@ const Groups = () => {
           groups.map((group) => (
             <li
               key={group.id}
-              className="list-row"
+              className="list-row group-row"
               onClick={() => handleGroupClick(group)}
             >
               <div className="avatar-sm">{group.groupName?.[0] || "G"}</div>
               <span className="row-name">{group.groupName}</span>
-              <span className="row-tag">{group.groupType || "Group"}</span>
+              <div className="group-actions">
+                {onOpenChat && (
+                  <button
+                    className="group-chat-btn"
+                    onClick={(e) => handleOpenGroupChat(group, e)}
+                    title="Group chat"
+                  >
+                    <FiMessageCircle size={16} />
+                  </button>
+                )}
+                <span className="row-tag">{group.groupType || "Group"}</span>
+              </div>
             </li>
           ))
         ) : (

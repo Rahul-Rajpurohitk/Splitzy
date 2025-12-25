@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
+import { FiMessageCircle, FiX } from 'react-icons/fi';
 import { setExpenseFilter } from '../features/expense/expenseSlice'; // New action
 
-function Friends() {
+function Friends({ onOpenChat }) {
   const dispatch = useDispatch();
   const [friends, setFriends] = useState([]);  // array of friend objects { id, name, ... }
   const [showAddModal, setShowAddModal] = useState(false);
@@ -17,6 +18,26 @@ function Friends() {
   // Token & userId from localStorage
   const token = localStorage.getItem('splitzyToken');
   const userId = localStorage.getItem('myUserId');
+  
+  // Handle opening chat with a friend
+  const handleOpenFriendChat = async (friend, e) => {
+    e.stopPropagation();
+    if (!onOpenChat) return;
+    
+    try {
+      // Create or get existing P2P thread with this friend
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/chat/p2p?userId1=${userId}&userId2=${friend.id}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const thread = response.data;
+      onOpenChat(thread);
+    } catch (error) {
+      console.error('Error opening chat:', error);
+    }
+  };
 
   // ------------------------------------
   // 1) Fetch friend list (on mount)
@@ -166,18 +187,30 @@ function Friends() {
       <ul className="list-stack compact">
         {topFriends.length > 0 ? (
           topFriends.map((friend) => (
-            <li key={friend.id} className="list-row" onClick={() => handleFriendClick(friend)}>
+            <li key={friend.id} className="list-row friend-row" onClick={() => handleFriendClick(friend)}>
               <div className="avatar-sm">{friend.name?.[0] || "F"}</div>
               <span className="row-name">{friend.name}</span>
-              <button
-                className="row-action"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleOpenUnfriendModal(friend);
-                }}
-              >
-                ×
-              </button>
+              <div className="friend-actions">
+                {onOpenChat && (
+                  <button
+                    className="friend-chat-btn"
+                    onClick={(e) => handleOpenFriendChat(friend, e)}
+                    title="Send message"
+                  >
+                    <FiMessageCircle size={16} />
+                  </button>
+                )}
+                <button
+                  className="row-action unfriend-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenUnfriendModal(friend);
+                  }}
+                  title="Remove friend"
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
             </li>
           ))
         ) : (

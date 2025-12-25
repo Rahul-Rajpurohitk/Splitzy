@@ -673,9 +673,9 @@ function Home() {
                     <FiX size={14} />
                   </button>
           </div>
-                <Friends />
+                <Friends onOpenChat={handleOpenChat} />
                 <div className="panel-divider" />
-                <Groups />
+                <Groups onOpenChat={handleOpenChat} />
               </>
             )}
         </aside>
