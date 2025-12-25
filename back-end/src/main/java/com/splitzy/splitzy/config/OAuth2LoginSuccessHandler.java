@@ -20,6 +20,8 @@ import java.util.Optional;
 @Component
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OAuth2LoginSuccessHandler.class);
+
     @Autowired
     private UserDao userDao;
 
@@ -31,11 +33,21 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+        // CRITICAL: Log everything to debug tenant-level bug
+        logger.info("[OAuth2] ========== OAuth Success Handler ==========");
+        logger.info("[OAuth2] Authentication principal type: {}", authentication.getPrincipal().getClass().getName());
+        
         OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+        
+        // Log ALL attributes from Google
+        logger.info("[OAuth2] OAuth2User attributes: {}", oauth2User.getAttributes());
         
         // Extract details from Google user
         String email = oauth2User.getAttribute("email");
         String name = oauth2User.getAttribute("name");
+        
+        logger.info("[OAuth2] Extracted email: {}", email);
+        logger.info("[OAuth2] Extracted name: {}", name);
         
         // Check if user exists
         Optional<UserDto> userOptional = userDao.findByEmail(email);
@@ -61,6 +73,12 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         
         // Generate JWT
         String token = jwtUtil.generateToken(email);
+        
+        logger.info("[OAuth2] Generated JWT for email: {}", email);
+        logger.info("[OAuth2] Redirecting to: {}/oauth2/redirect?token=...", frontendUrl);
+        
+        // Clear any existing session to prevent session fixation
+        request.getSession().invalidate();
         
         // Redirect to frontend with token
         response.sendRedirect(frontendUrl + "/oauth2/redirect?token=" + token);
