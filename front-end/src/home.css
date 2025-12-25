@@ -4198,10 +4198,17 @@ html {
 
 /* Small Tablet / Large Phone: 768px */
 @media (max-width: 768px) {
+  /* Prevent body scroll when panels are open */
+  body.mobile-panel-open {
+    overflow: hidden;
+  }
+  
   .main-grid {
     grid-template-columns: 1fr;
     gap: 0;
-    padding-bottom: 70px; /* Space for bottom nav */
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); /* Space for bottom nav */
+    min-height: calc(100vh - 60px); /* Account for topbar */
+    overflow-y: auto;
   }
   
   .main-grid.right-panel-hidden {
@@ -4213,19 +4220,23 @@ html {
   .panel.sidebar {
     display: none;
     position: fixed;
-    top: 0;
+    top: 60px; /* Below topbar */
     left: 0;
     right: 0;
-    bottom: 70px; /* Above bottom nav */
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px)); /* Above bottom nav */
     z-index: 9999;
     border-radius: 0;
-    animation: slideInFromLeft 0.3s ease-out;
     overflow-y: auto;
-    background: var(--card);
+    background: rgb(15, 23, 42); /* Solid background instead of var */
+    border: none;
+  }
+  
+  .panel.left-panel {
+    animation: slideInFromLeft 0.25s ease-out;
   }
   
   .panel.sidebar {
-    animation: slideInFromRight 0.3s ease-out;
+    animation: slideInFromRight 0.25s ease-out;
   }
   
   /* Show panels when toggled (via JS class) */
@@ -4238,11 +4249,32 @@ html {
   .panel.center {
     border-radius: 0;
     border: none;
+    min-height: auto;
+    overflow: visible;
   }
   
-  /* Topbar adjustments - minimal on mobile */
+  .panel.center-panel {
+    padding-bottom: 20px;
+  }
+  
+  /* Topbar adjustments - fixed and minimal on mobile */
   .topbar {
-    padding: 8px 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    margin-bottom: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    z-index: 10001;
+  }
+  
+  .app-bg {
+    padding-top: calc(60px + env(safe-area-inset-top, 0px)); /* Space for fixed topbar */
   }
   
   .topbar .search-bar {
@@ -4260,16 +4292,106 @@ html {
   }
   
   .brand-name {
-    font-size: 1.1rem;
+    font-size: 1rem;
+  }
+  
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
   }
   
   .user-pill {
-    display: flex;
-    padding: 4px 8px;
+    display: none; /* Hide on mobile, use bottom nav menu instead */
   }
   
-  .user-meta {
-    display: none;
+  /* Mobile Quick Actions in Left Panel */
+  .mobile-quick-actions {
+    display: block;
+    padding: 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .mobile-user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .mobile-user-info .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+  
+  .mobile-user-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .mobile-user-name {
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95rem;
+  }
+  
+  .mobile-user-email {
+    font-size: 0.75rem;
+    color: var(--muted);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .mobile-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  
+  .mobile-actions-grid .nav-icon-pill,
+  .mobile-actions-grid .chat-dropdown > button {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+  }
+  
+  .mobile-actions-grid .nav-icon-pill .nav-icon-text {
+    display: inline; /* Show text in mobile menu */
+  }
+  
+  .mobile-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.06);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  
+  .mobile-action-btn.danger {
+    color: #ef4444;
+  }
+  
+  .mobile-action-icon {
+    font-size: 1rem;
+  }
+  
+  .panel-divider.mobile-only {
+    display: block;
+    margin: 12px 0;
   }
   
   /* Expense list adjustments */
@@ -4321,6 +4443,51 @@ html {
     margin-left: auto;
   }
   
+  /* Fix expense card breakdown table for mobile */
+  .breakdown-header,
+  .breakdown-row {
+    grid-template-columns: 1fr 55px 55px 60px;
+    gap: 4px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .breakdown-name {
+    max-width: 80px;
+  }
+  
+  /* Expense card adjustments */
+  .expense-card-body h4 {
+    font-size: 0.85rem;
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .expense-details {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+  
+  .expense-details-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .detail-row {
+    font-size: 0.75rem;
+  }
+  
+  /* Expense card amounts */
+  .expense-amount {
+    font-size: 0.95rem;
+  }
+  
+  .expense-meta {
+    font-size: 0.7rem;
+  }
+  
   /* Mobile Bottom Navigation */
   .mobile-bottom-nav {
     display: flex;
@@ -4328,12 +4495,13 @@ html {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 70px;
-    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgb(15, 23, 42) 100%);
-    border-top: 1px solid rgba(255,255,255,0.1);
+    height: auto;
+    min-height: 60px;
+    background: rgb(15, 23, 42);
+    border-top: 1px solid rgba(255,255,255,0.15);
     z-index: 10000;
     padding: 8px 0;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
   }
   
   .mobile-nav-item {
@@ -4393,7 +4561,7 @@ html {
   }
 }
 
-/* Hide bottom nav on desktop */
+/* Hide mobile elements on desktop */
 @media (min-width: 769px) {
   .mobile-bottom-nav {
     display: none;
@@ -4404,6 +4572,14 @@ html {
   }
   
   .mobile-panel-overlay {
+    display: none;
+  }
+  
+  .mobile-quick-actions {
+    display: none;
+  }
+  
+  .panel-divider.mobile-only {
     display: none;
   }
   

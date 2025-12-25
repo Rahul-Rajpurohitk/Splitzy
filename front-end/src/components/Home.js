@@ -419,10 +419,50 @@ function Home() {
           {/* Left Panel - Balance & Activity */}
           <aside className={`panel left-panel ${mobileLeftPanel ? 'mobile-open' : ''}`}>
             <div className="panel-header">
-              <span>Your Balance</span>
+              <span>Menu</span>
               <button className="mobile-panel-close" onClick={() => setMobileLeftPanel(false)}>
                 <FiX size={20} />
               </button>
+            </div>
+            
+            {/* Mobile Quick Actions - only visible on mobile */}
+            <div className="mobile-quick-actions">
+              <div className="mobile-user-info">
+                <div className="avatar">
+                  {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
+                </div>
+                <div className="mobile-user-details">
+                  <span className="mobile-user-name">{username || 'You'}</span>
+                  <span className="mobile-user-email">{localStorage.getItem('myUserEmail') || ''}</span>
+                </div>
+              </div>
+              <div className="mobile-actions-grid">
+                <ChatDropdown onSelectThread={(t) => { 
+                  handleOpenChat(t); 
+                  setMobileLeftPanel(false);
+                }} />
+                <Notification />
+                <button 
+                  className="mobile-action-btn"
+                  onClick={() => { setSelectedView('profile'); setMobileLeftPanel(false); }}
+                >
+                  <span className="mobile-action-icon">👤</span>
+                  <span>Profile</span>
+                </button>
+                <button 
+                  className="mobile-action-btn danger"
+                  onClick={handleLogout}
+                >
+                  <span className="mobile-action-icon">🚪</span>
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+            
+            <div className="panel-divider mobile-only" />
+            
+            <div className="panel-header">
+              <span>Your Balance</span>
             </div>
             
             {/* Horizontal Scrollable Balance Cards */}
@@ -669,7 +709,7 @@ function Home() {
         {/* Mobile Bottom Navigation */}
         <nav className="mobile-bottom-nav">
           <button 
-            className={`mobile-nav-item ${selectedView === 'dashboard' ? 'active' : ''}`}
+            className={`mobile-nav-item ${selectedView === 'dashboard' && !mobileLeftPanel && !mobileRightPanel ? 'active' : ''}`}
             onClick={() => { setSelectedView('dashboard'); setMobileLeftPanel(false); setMobileRightPanel(false); }}
           >
             <FiHome size={20} />
@@ -680,13 +720,13 @@ function Home() {
             onClick={() => { setSelectedView('analytics'); setMobileLeftPanel(false); setMobileRightPanel(false); }}
           >
             <FiBarChart2 size={20} />
-            <span>Analytics</span>
+            <span>Stats</span>
           </button>
           <button 
             className="mobile-nav-item mobile-nav-add"
             onClick={() => setShowAddExpenseModal(true)}
           >
-            <FiPlus size={24} />
+            <FiPlus size={22} />
           </button>
           <button 
             className={`mobile-nav-item ${mobileRightPanel ? 'active' : ''}`}
@@ -700,7 +740,7 @@ function Home() {
             onClick={() => { setMobileLeftPanel(!mobileLeftPanel); setMobileRightPanel(false); }}
           >
             <FiMenu size={20} />
-            <span>More</span>
+            <span>Menu</span>
           </button>
         </nav>
         
