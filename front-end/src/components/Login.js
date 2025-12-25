@@ -39,12 +39,10 @@ function Login() {
         // If there's an error field, show it
         setError(data.error);
       } else if (data.token) {
-        // Clear old session data first to prevent stale data issues
-        localStorage.removeItem('splitzyToken');
-        localStorage.removeItem('myUserId');
-        localStorage.removeItem('myUserName');
-        localStorage.removeItem('myUserEmail');
-        localStorage.removeItem('myFriendIds');
+        // CRITICAL: Clear ALL storage to prevent tenant-level data leakage
+        console.log('[Login] Clearing ALL localStorage before storing new user data');
+        localStorage.clear();
+        sessionStorage.clear();
         
         // Store token + user details
         localStorage.setItem('splitzyToken', data.token);
