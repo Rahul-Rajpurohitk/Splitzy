@@ -3063,6 +3063,80 @@ html {
   transform: scale(1.05);
 }
 
+/* Mobile More Button - hidden on desktop by default */
+.expense-more-btn {
+  display: none; /* Hidden by default, shown on mobile */
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+}
+
+.expense-more-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+/* Wrapper for swipeable expense card */
+.expense-card-wrapper {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+/* Swipe actions - hidden on desktop */
+.swipe-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: none; /* Hidden by default */
+  align-items: stretch;
+  z-index: 1;
+}
+
+.swipe-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  border: none;
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 600;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.swipe-action-btn.settle {
+  background: #22c55e;
+}
+
+.swipe-action-btn.delete {
+  background: #ef4444;
+}
+
+/* Settled inline badge */
+.settled-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* ─────────────────────────────────────────────────────────
    EXPENSE CARD IN CHAT WINDOW
 ───────────────────────────────────────────────────────── */
@@ -4220,15 +4294,18 @@ html {
   .panel.sidebar {
     display: none;
     position: fixed;
-    top: 60px; /* Below topbar */
+    top: calc(56px + env(safe-area-inset-top, 0px)); /* Below topbar */
     left: 0;
     right: 0;
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px)); /* Above bottom nav */
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px)); /* Above bottom nav */
     z-index: 9999;
     border-radius: 0;
     overflow-y: auto;
-    background: rgb(15, 23, 42); /* Solid background instead of var */
+    background: #0f172a !important; /* Solid dark background - NO BLUR */
+    backdrop-filter: none !important; /* DISABLE blur on mobile */
+    -webkit-backdrop-filter: none !important;
     border: none;
+    box-shadow: none;
   }
   
   .panel.left-panel {
@@ -4271,6 +4348,9 @@ html {
     border-right: none;
     border-top: none;
     z-index: 10001;
+    background: #0f172a !important; /* Solid background */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
   
   .app-bg {
@@ -4446,20 +4526,20 @@ html {
   /* Fix expense card breakdown table for mobile */
   .breakdown-header,
   .breakdown-row {
-    grid-template-columns: 1fr 55px 55px 60px;
-    gap: 4px;
-    padding: 8px 10px;
-    font-size: 0.75rem;
+    grid-template-columns: 1fr 50px 50px 55px;
+    gap: 3px;
+    padding: 8px 8px;
+    font-size: 0.72rem;
   }
   
   .breakdown-name {
-    max-width: 80px;
+    max-width: 70px;
   }
   
-  /* Expense card adjustments */
-  .expense-card-body h4 {
-    font-size: 0.85rem;
-    max-width: 100px;
+  /* Expense card adjustments for mobile */
+  .expense-title {
+    font-size: 0.85rem !important;
+    max-width: 140px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4471,21 +4551,135 @@ html {
   }
   
   .expense-details-header {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 8px;
   }
   
   .detail-row {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
   }
   
   /* Expense card amounts */
-  .expense-amount {
-    font-size: 0.95rem;
+  .expense-total {
+    font-size: 0.9rem !important;
   }
   
   .expense-meta {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
+  }
+  
+  .expense-meta-item {
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* Hide desktop share button, show mobile more button */
+  .expense-share-btn.desktop-only {
+    display: none !important;
+  }
+  
+  .expense-more-btn.mobile-only {
+    display: flex !important;
+  }
+  
+  /* Swipe actions revealed on left swipe */
+  .expense-card-wrapper {
+    overflow: hidden;
+    border-radius: 14px;
+  }
+  
+  .swipe-actions {
+    display: flex; /* Show on mobile */
+  }
+  
+  /* Make expense card swipeable */
+  .expense-card {
+    position: relative;
+    z-index: 2;
+    background: var(--card);
+    transition: transform 0.15s ease-out;
+    will-change: transform;
+  }
+  
+  .expense-card.swiping {
+    transition: none;
+  }
+  
+  /* Mobile dropdown menu */
+  .expense-mobile-menu {
+    position: absolute;
+    right: 10px;
+    top: 100%;
+    background: rgb(30, 41, 59);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 6px 0;
+    z-index: 1000;
+    min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  
+  .expense-mobile-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    color: #e2e8f0;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  
+  .expense-mobile-menu button:hover {
+    background: rgba(255,255,255,0.08);
+  }
+  
+  .expense-mobile-menu button.danger {
+    color: #ef4444;
+  }
+  
+  /* Inline badges for mobile */
+  .personal-badge {
+    font-size: 0.7rem !important;
+    padding: 1px 4px !important;
+    margin-left: 4px;
+  }
+  
+  .settled-inline-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  
+  /* Expense actions in details - mobile optimized */
+  .expense-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .expense-action-btn {
+    padding: 8px 12px !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Hide expand icon on mobile (swipe is the interaction) */
+  .expense-expand {
+    display: flex;
+    padding: 4px;
   }
   
   /* Mobile Bottom Navigation */
@@ -4554,10 +4748,11 @@ html {
     top: 0;
     left: 0;
     right: 0;
-    bottom: 70px;
-    background: rgba(0,0,0,0.5);
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
     z-index: 9998;
-    backdrop-filter: blur(4px);
+    backdrop-filter: none; /* NO blur on mobile overlay */
+    -webkit-backdrop-filter: none;
   }
 }
 
@@ -4581,6 +4776,25 @@ html {
   
   .panel-divider.mobile-only {
     display: none;
+  }
+  
+  /* Hide mobile-only elements */
+  .mobile-only {
+    display: none !important;
+  }
+  
+  /* Show desktop-only elements */
+  .desktop-only {
+    display: flex !important;
+  }
+  
+  /* Swipe actions hidden on desktop */
+  .swipe-actions {
+    display: none;
+  }
+  
+  .expense-card-wrapper {
+    overflow: visible;
   }
   
   /* Show top actions on desktop */

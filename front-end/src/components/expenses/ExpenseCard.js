@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2, FiTrash2, FiCheckCircle, FiX } from "react-icons/fi";
+import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2, FiTrash2, FiCheckCircle, FiX, FiMoreVertical } from "react-icons/fi";
 import ShareExpenseModal from "./ShareExpenseModal";
 import axios from "axios";
 import { fetchExpensesThunk } from "../../features/expense/expenseSlice";
@@ -79,12 +79,59 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   const [partialAmount, setPartialAmount] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  
+  // Swipe state
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const cardRef = useRef(null);
   
   const expense = useSelector((state) =>
     state.expense.list.find((e) => e.id === expenseId)
   );
 
   if (!expense) return null;
+
+  // Swipe handlers for iOS-style actions
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    setIsSwiping(false);
+  };
+
+  const handleTouchMove = (e) => {
+    const deltaX = touchStartX.current - e.touches[0].clientX;
+    const deltaY = Math.abs(touchStartY.current - e.touches[0].clientY);
+    
+    // Only swipe horizontally if not scrolling vertically
+    if (deltaY > 30) return;
+    
+    if (deltaX > 10) {
+      setIsSwiping(true);
+      // Limit swipe to max 140px (reveal action buttons)
+      const offset = Math.min(deltaX, 140);
+      setSwipeOffset(offset);
+    } else if (deltaX < -10 && swipeOffset > 0) {
+      // Swiping back
+      setSwipeOffset(Math.max(0, swipeOffset + deltaX));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    // Snap to open or closed
+    if (swipeOffset > 70) {
+      setSwipeOffset(140); // Fully open
+    } else {
+      setSwipeOffset(0); // Close
+    }
+    setTimeout(() => setIsSwiping(false), 100);
+  };
+
+  const closeSwipe = () => {
+    setSwipeOffset(0);
+  };
 
   const handleShareClick = (e) => {
     e.stopPropagation(); // Don't toggle expand
@@ -197,68 +244,122 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   const categoryIcon = getCategoryIcon(expense.category, expense.description);
 
   return (
-    <div className="expense-card" onClick={onToggleExpand}>
-      {/* Main row */}
-      <div className="expense-main">
-        {/* Left: Date badge + Icon */}
-        <div className="expense-left">
-          <div className="expense-date-badge">
-            <span className="expense-day">{dayNum}</span>
-            <span className="expense-month">{shortMonth}</span>
-          </div>
-          <div className="expense-icon">{categoryIcon}</div>
-        </div>
-
-        {/* Center: Description + meta */}
-        <div className="expense-center">
-          <h4 className="expense-title">
-            {expense.description}
-            {expense.isPersonal && <span className="personal-badge">👤 Personal</span>}
-            {expense.isSettled && <span className="personal-badge" style={{background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e'}}>✓ Settled</span>}
-          </h4>
-          <div className="expense-meta">
-            <span className="expense-meta-item">
-              <FiDollarSign size={12} />
-              {paidByText}
-            </span>
-            {expense.groupName && (
-              <span className="expense-meta-item group-tag">
-                <FiUsers size={12} />
-                {expense.groupName}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Right: Amount + Net */}
-        <div className="expense-right">
-          <div className="expense-total">${expense.totalAmount?.toFixed(2)}</div>
-          <div className="expense-net" style={{ color: netColor }}>
-            {netStatus === "settled" ? (
-              <span className="settled-badge">✓ Settled</span>
-            ) : (
-              <>
-                <span className="net-label">{netLabel}</span>
-                <span className="net-amount">${netAmount.toFixed(2)}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Share button */}
+    <div className="expense-card-wrapper" ref={cardRef}>
+      {/* Swipe action buttons (revealed on swipe left) */}
+      <div className="swipe-actions">
+        {!expense.isSettled && myNet !== 0 && (
+          <button 
+            className="swipe-action-btn settle"
+            onClick={(e) => { e.stopPropagation(); closeSwipe(); handleSettleFull(e); }}
+          >
+            <FiCheckCircle size={18} />
+            <span>Settle</span>
+          </button>
+        )}
         <button 
-          className="expense-share-btn" 
-          onClick={handleShareClick}
-          title="Share expense"
+          className="swipe-action-btn delete"
+          onClick={(e) => { e.stopPropagation(); closeSwipe(); handleDelete(e); }}
         >
-          <FiShare2 size={16} />
+          <FiTrash2 size={18} />
+          <span>Delete</span>
         </button>
-
-        {/* Expand indicator */}
-        <div className="expense-expand">
-          {isExpanded ? <FiChevronUp size={18} /> : <FiChevronDown size={18} />}
-        </div>
       </div>
+
+      {/* Main card (swipeable) */}
+      <div 
+        className={`expense-card ${isSwiping ? 'swiping' : ''}`}
+        style={{ transform: `translateX(-${swipeOffset}px)` }}
+        onClick={(e) => { if (!isSwiping && swipeOffset === 0) onToggleExpand(); else if (swipeOffset > 0) closeSwipe(); }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Main row */}
+        <div className="expense-main">
+          {/* Left: Date badge + Icon */}
+          <div className="expense-left">
+            <div className="expense-date-badge">
+              <span className="expense-day">{dayNum}</span>
+              <span className="expense-month">{shortMonth}</span>
+            </div>
+            <div className="expense-icon">{categoryIcon}</div>
+          </div>
+
+          {/* Center: Description + meta */}
+          <div className="expense-center">
+            <h4 className="expense-title">
+              {expense.description}
+              {expense.isPersonal && <span className="personal-badge">👤</span>}
+              {expense.isSettled && <span className="settled-inline-badge">✓</span>}
+            </h4>
+            <div className="expense-meta">
+              <span className="expense-meta-item">
+                <FiDollarSign size={11} />
+                {paidByText}
+              </span>
+              {expense.groupName && (
+                <span className="expense-meta-item group-tag">
+                  <FiUsers size={11} />
+                  {expense.groupName}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Amount + Net */}
+          <div className="expense-right">
+            <div className="expense-total">${expense.totalAmount?.toFixed(2)}</div>
+            <div className="expense-net" style={{ color: netColor }}>
+              {netStatus === "settled" ? (
+                <span className="settled-badge">Settled</span>
+              ) : (
+                <>
+                  <span className="net-label">{netLabel}</span>
+                  <span className="net-amount">${netAmount.toFixed(2)}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop: Share button */}
+          <button 
+            className="expense-share-btn desktop-only" 
+            onClick={handleShareClick}
+            title="Share expense"
+          >
+            <FiShare2 size={16} />
+          </button>
+
+          {/* Mobile: More menu button */}
+          <button 
+            className="expense-more-btn mobile-only"
+            onClick={(e) => { e.stopPropagation(); setShowMobileMenu(!showMobileMenu); }}
+          >
+            <FiMoreVertical size={16} />
+          </button>
+
+          {/* Expand indicator */}
+          <div className="expense-expand">
+            {isExpanded ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
+          </div>
+        </div>
+
+        {/* Mobile dropdown menu */}
+        {showMobileMenu && (
+          <div className="expense-mobile-menu" onClick={(e) => e.stopPropagation()}>
+            <button onClick={(e) => { handleShareClick(e); setShowMobileMenu(false); }}>
+              <FiShare2 size={14} /> Share
+            </button>
+            {!expense.isSettled && myNet !== 0 && (
+              <button onClick={(e) => { handleSettleFull(e); setShowMobileMenu(false); }}>
+                <FiCheckCircle size={14} /> Mark as Paid
+              </button>
+            )}
+            <button className="danger" onClick={(e) => { handleDelete(e); setShowMobileMenu(false); }}>
+              <FiTrash2 size={14} /> Delete
+            </button>
+          </div>
+        )}
 
       {/* Share Modal */}
       {showShareModal && (
@@ -358,87 +459,88 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
         </div>
       )}
 
-      {/* Settle Modal */}
-      {showSettleModal && (
-        <div className="settle-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="settle-modal-content">
-            <div className="settle-modal-header">
-              <h3>Mark as Paid</h3>
-              <button className="settle-modal-close" onClick={() => setShowSettleModal(false)}>
-                <FiX size={18} />
-              </button>
-            </div>
-            
-            <div className="settle-amount-info">
-              <div className="settle-amount-row">
-                <span>Your share:</span>
-                <span>${Math.abs(myParticipant.share || 0).toFixed(2)}</span>
+        {/* Settle Modal */}
+        {showSettleModal && (
+          <div className="settle-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="settle-modal-content">
+              <div className="settle-modal-header">
+                <h3>Mark as Paid</h3>
+                <button className="settle-modal-close" onClick={() => setShowSettleModal(false)}>
+                  <FiX size={18} />
+                </button>
               </div>
-              <div className="settle-amount-row">
-                <span>Already settled:</span>
-                <span>${(myParticipant.settledAmount || 0).toFixed(2)}</span>
-              </div>
-              <div className="settle-amount-row">
-                <span>Remaining:</span>
-                <span>${Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0)).toFixed(2)}</span>
-              </div>
-            </div>
-            
-            <div className="settle-options">
-              <label 
-                className={`settle-option ${settleMode === 'full' ? 'active' : ''}`}
-                onClick={() => setSettleMode('full')}
-              >
-                <input 
-                  type="radio" 
-                  name="settleMode" 
-                  checked={settleMode === 'full'} 
-                  onChange={() => setSettleMode('full')}
-                />
-                <span>Settle full remaining amount</span>
-              </label>
-              <label 
-                className={`settle-option ${settleMode === 'partial' ? 'active' : ''}`}
-                onClick={() => setSettleMode('partial')}
-              >
-                <input 
-                  type="radio" 
-                  name="settleMode" 
-                  checked={settleMode === 'partial'} 
-                  onChange={() => setSettleMode('partial')}
-                />
-                <span>Settle partial amount</span>
-              </label>
-              {settleMode === 'partial' && (
-                <div className="settle-partial-input">
-                  <input
-                    type="number"
-                    placeholder="Enter amount to settle"
-                    value={partialAmount}
-                    onChange={(e) => setPartialAmount(e.target.value)}
-                    step="0.01"
-                    min="0"
-                    max={Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0))}
-                  />
+              
+              <div className="settle-amount-info">
+                <div className="settle-amount-row">
+                  <span>Your share:</span>
+                  <span>${Math.abs(myParticipant.share || 0).toFixed(2)}</span>
                 </div>
-              )}
-            </div>
-            
-            <div className="settle-modal-actions">
-              <button className="settle-cancel-btn" onClick={() => setShowSettleModal(false)}>
-                Cancel
-              </button>
-              <button 
-                className="settle-confirm-btn" 
-                onClick={handleSettle}
-                disabled={isSettling || (settleMode === 'partial' && (!partialAmount || parseFloat(partialAmount) <= 0))}
-              >
-                {isSettling ? 'Processing...' : 'Confirm Payment'}
-              </button>
+                <div className="settle-amount-row">
+                  <span>Already settled:</span>
+                  <span>${(myParticipant.settledAmount || 0).toFixed(2)}</span>
+                </div>
+                <div className="settle-amount-row">
+                  <span>Remaining:</span>
+                  <span>${Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0)).toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <div className="settle-options">
+                <label 
+                  className={`settle-option ${settleMode === 'full' ? 'active' : ''}`}
+                  onClick={() => setSettleMode('full')}
+                >
+                  <input 
+                    type="radio" 
+                    name="settleMode" 
+                    checked={settleMode === 'full'} 
+                    onChange={() => setSettleMode('full')}
+                  />
+                  <span>Settle full remaining amount</span>
+                </label>
+                <label 
+                  className={`settle-option ${settleMode === 'partial' ? 'active' : ''}`}
+                  onClick={() => setSettleMode('partial')}
+                >
+                  <input 
+                    type="radio" 
+                    name="settleMode" 
+                    checked={settleMode === 'partial'} 
+                    onChange={() => setSettleMode('partial')}
+                  />
+                  <span>Settle partial amount</span>
+                </label>
+                {settleMode === 'partial' && (
+                  <div className="settle-partial-input">
+                    <input
+                      type="number"
+                      placeholder="Enter amount to settle"
+                      value={partialAmount}
+                      onChange={(e) => setPartialAmount(e.target.value)}
+                      step="0.01"
+                      min="0"
+                      max={Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0))}
+                    />
+                  </div>
+                )}
+              </div>
+              
+              <div className="settle-modal-actions">
+                <button className="settle-cancel-btn" onClick={() => setShowSettleModal(false)}>
+                  Cancel
+                </button>
+                <button 
+                  className="settle-confirm-btn" 
+                  onClick={handleSettle}
+                  disabled={isSettling || (settleMode === 'partial' && (!partialAmount || parseFloat(partialAmount) <= 0))}
+                >
+                  {isSettling ? 'Processing...' : 'Confirm Payment'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
