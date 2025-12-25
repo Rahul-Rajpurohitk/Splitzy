@@ -14,9 +14,17 @@ import {
 
 import ExpenseList from "./ExpenseList";
 
-function ExpenseCenter({ onOpenChat }) {
+function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
   const dispatch = useDispatch();
   const [showModal, setShowModal] = useState(false);
+  
+  // Sync external modal trigger from mobile nav
+  useEffect(() => {
+    if (externalShowAddModal) {
+      setShowModal(true);
+      onCloseAddModal?.(); // Reset external state
+    }
+  }, [externalShowAddModal, onCloseAddModal]);
 
   // We read from Redux only if we need to know if we are loading or have errors
   const status = useSelector((state) => state.expense.status);

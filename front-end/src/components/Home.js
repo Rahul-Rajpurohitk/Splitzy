@@ -13,7 +13,7 @@ import Groups from './Groups';
 import ProfilePanel from './ProfilePanel';
 import { 
   FiHome, FiBarChart2, FiUsers, FiX, FiClock, 
-  FiChevronDown, FiChevronUp, FiTrendingUp
+  FiChevronDown, FiChevronUp, FiTrendingUp, FiPlus, FiMenu
 } from 'react-icons/fi';
 import ChatDropdown from './chat/ChatDropdown';
 import ChatWindow from './chat/ChatWindow';
@@ -91,6 +91,11 @@ function Home() {
   const [selectedView, setSelectedView] = useState('dashboard');
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [openChats, setOpenChats] = useState([]);
+  
+  // Mobile navigation state
+  const [mobileLeftPanel, setMobileLeftPanel] = useState(false);
+  const [mobileRightPanel, setMobileRightPanel] = useState(false);
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   
   // Recent activity state
   const [recentActivity, setRecentActivity] = useState([]);
@@ -412,9 +417,12 @@ function Home() {
 
         <div className={`main-grid ${!showRightPanel ? 'right-panel-hidden' : ''}`}>
           {/* Left Panel - Balance & Activity */}
-          <aside className="panel left-panel">
+          <aside className={`panel left-panel ${mobileLeftPanel ? 'mobile-open' : ''}`}>
             <div className="panel-header">
               <span>Your Balance</span>
+              <button className="mobile-panel-close" onClick={() => setMobileLeftPanel(false)}>
+                <FiX size={20} />
+              </button>
             </div>
             
             {/* Horizontal Scrollable Balance Cards */}
@@ -588,7 +596,11 @@ function Home() {
           {/* Center Panel - Expenses / Analytics / Profile */}
           <section className="panel center-panel">
             {selectedView === 'dashboard' && (
-              <ExpenseCenter onOpenChat={handleOpenChat} />
+              <ExpenseCenter 
+                onOpenChat={handleOpenChat} 
+                externalShowAddModal={showAddExpenseModal}
+                onCloseAddModal={() => setShowAddExpenseModal(false)}
+              />
             )}
             {selectedView === 'analytics' && <AnalyticsDashboard />}
             {selectedView === 'profile' && (
@@ -605,11 +617,14 @@ function Home() {
         </section>
 
           {/* Right Panel - Friends & Groups */}
-          <aside className={`panel sidebar ${!showRightPanel ? 'panel-collapsed' : ''}`}>
+          <aside className={`panel sidebar ${!showRightPanel ? 'panel-collapsed' : ''} ${mobileRightPanel ? 'mobile-open' : ''}`}>
             {showRightPanel && (
               <>
                 <div className="sidebar-header">
                   <span className="sidebar-title">People</span>
+                  <button className="mobile-panel-close" onClick={() => setMobileRightPanel(false)}>
+                    <FiX size={20} />
+                  </button>
                   <button 
                     className="sidebar-close-btn"
                     onClick={() => setShowRightPanel(false)}
@@ -650,6 +665,52 @@ function Home() {
             );
           })}
         </div>
+        
+        {/* Mobile Bottom Navigation */}
+        <nav className="mobile-bottom-nav">
+          <button 
+            className={`mobile-nav-item ${selectedView === 'dashboard' ? 'active' : ''}`}
+            onClick={() => { setSelectedView('dashboard'); setMobileLeftPanel(false); setMobileRightPanel(false); }}
+          >
+            <FiHome size={20} />
+            <span>Home</span>
+          </button>
+          <button 
+            className={`mobile-nav-item ${selectedView === 'analytics' ? 'active' : ''}`}
+            onClick={() => { setSelectedView('analytics'); setMobileLeftPanel(false); setMobileRightPanel(false); }}
+          >
+            <FiBarChart2 size={20} />
+            <span>Analytics</span>
+          </button>
+          <button 
+            className="mobile-nav-item mobile-nav-add"
+            onClick={() => setShowAddExpenseModal(true)}
+          >
+            <FiPlus size={24} />
+          </button>
+          <button 
+            className={`mobile-nav-item ${mobileRightPanel ? 'active' : ''}`}
+            onClick={() => { setMobileRightPanel(!mobileRightPanel); setMobileLeftPanel(false); }}
+          >
+            <FiUsers size={20} />
+            <span>People</span>
+          </button>
+          <button 
+            className={`mobile-nav-item ${mobileLeftPanel ? 'active' : ''}`}
+            onClick={() => { setMobileLeftPanel(!mobileLeftPanel); setMobileRightPanel(false); }}
+          >
+            <FiMenu size={20} />
+            <span>More</span>
+          </button>
+        </nav>
+        
+        {/* Mobile Panel Overlay */}
+        {(mobileLeftPanel || mobileRightPanel) && (
+          <div 
+            className="mobile-panel-overlay" 
+            onClick={() => { setMobileLeftPanel(false); setMobileRightPanel(false); }}
+          />
+        )}
       </div>
     </div>
   );
