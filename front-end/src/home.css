@@ -4364,24 +4364,32 @@ html {
     grid-template-columns: 1fr;
   }
   
-  /* Hide side panels on mobile by default */
+  /* =============================================
+     MOBILE SIDE PANELS - COMPLETELY OPAQUE
+     No blur, no transparency, solid backgrounds
+     ============================================= */
   .panel.left-panel,
   .panel.sidebar {
     display: none;
     position: fixed;
-    top: calc(56px + env(safe-area-inset-top, 0px)); /* Below topbar */
-    left: 0;
-    right: 0;
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px)); /* Above bottom nav */
-    z-index: 9999;
-    border-radius: 0;
-    overflow-y: auto;
+    top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 9999 !important;
+    border-radius: 0 !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
-    background: #0a0f1f !important; /* SOLID dark background - NO transparency */
-    backdrop-filter: none !important; /* DISABLE blur on mobile */
+    /* FORCE SOLID BACKGROUND - NO TRANSPARENCY */
+    background: #060a14 !important;
+    background-color: #060a14 !important;
+    /* KILL ALL BLUR EFFECTS */
+    backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    border: none;
-    box-shadow: none;
+    filter: none !important;
+    opacity: 1 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
   
   .panel.left-panel {
@@ -4395,7 +4403,11 @@ html {
   /* Show panels when toggled (via JS class) */
   .panel.left-panel.mobile-open,
   .panel.sidebar.mobile-open {
-    display: flex;
+    display: flex !important;
+    background: #060a14 !important;
+    background-color: #060a14 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
   
   /* Center panel takes full width */
@@ -4700,13 +4712,15 @@ html {
     font-size: 1.2rem;
   }
   
+  /* Expense card title - WIDER for better readability */
   .expense-title {
-    font-size: 0.82rem !important;
-    max-width: 120px;
+    font-size: 0.85rem !important;
+    max-width: none !important; /* Remove width limit */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 2px;
+    margin-bottom: 3px;
+    font-weight: 600;
   }
   
   .expense-center {
@@ -4717,7 +4731,8 @@ html {
   
   .expense-right {
     text-align: right;
-    min-width: 70px;
+    min-width: 65px;
+    flex-shrink: 0;
   }
   
   .expense-details {
@@ -4737,42 +4752,56 @@ html {
   
   /* Expense card amounts */
   .expense-total {
-    font-size: 0.88rem !important;
+    font-size: 0.9rem !important;
     font-weight: 700;
   }
   
   .expense-net {
-    margin-top: 1px;
+    margin-top: 2px;
   }
   
   .net-label {
-    font-size: 0.65rem !important;
+    font-size: 0.68rem !important;
   }
   
   .net-amount {
-    font-size: 0.72rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 600;
   }
   
+  /* Expense meta - WIDER for full names */
   .expense-meta {
-    font-size: 0.65rem;
-    gap: 4px;
+    font-size: 0.7rem;
+    gap: 6px;
+    flex-wrap: wrap;
   }
   
   .expense-meta-item {
-    max-width: 80px;
+    max-width: none !important; /* Remove width limit - show full name */
     white-space: nowrap;
+    overflow: visible;
+  }
+  
+  /* Group tag styling */
+  .expense-meta-item.group-tag {
+    max-width: 100px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   
   /* Hide ALL share buttons on mobile expense cards - cleaner look */
-  .expense-share-btn.desktop-only {
+  .expense-share-btn,
+  .expense-share-btn.desktop-only,
+  .expense-share-btn-mobile,
+  .expense-share-dropdown-wrapper,
+  .expense-share-dropdown-wrapper.mobile-only,
+  button[title="Share expense"],
+  button[title="Share options"] {
     display: none !important;
-  }
-  
-  /* Hide mobile share dropdown wrapper completely - use swipe for actions */
-  .expense-share-dropdown-wrapper.mobile-only {
-    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
   }
   
   /* Hide expand icon on mobile - use tap to expand */
