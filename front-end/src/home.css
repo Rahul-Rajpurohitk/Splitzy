@@ -4628,6 +4628,11 @@ html {
     margin-left: auto;
   }
   
+  /* Hide desktop sidebar close button on mobile - prevents duplicate X */
+  .sidebar-close-btn {
+    display: none !important;
+  }
+  
   /* Fix expense card breakdown table for mobile */
   .breakdown-header,
   .breakdown-row {
@@ -4760,79 +4765,14 @@ html {
     text-overflow: ellipsis;
   }
   
-  /* Hide desktop share button, show mobile share dropdown */
+  /* Hide ALL share buttons on mobile expense cards - cleaner look */
   .expense-share-btn.desktop-only {
     display: none !important;
   }
   
-  /* Mobile share dropdown wrapper */
+  /* Hide mobile share dropdown wrapper completely - use swipe for actions */
   .expense-share-dropdown-wrapper.mobile-only {
-    display: block !important;
-    position: relative;
-  }
-  
-  /* Mobile share button - compact design */
-  .expense-share-btn-mobile {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 1px solid rgba(45, 212, 191, 0.3);
-    background: rgba(45, 212, 191, 0.12);
-    color: #2dd4bf;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  
-  .expense-share-btn-mobile:active {
-    background: rgba(45, 212, 191, 0.25);
-    transform: scale(0.95);
-  }
-  
-  /* Share dropdown menu */
-  .expense-share-dropdown {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    background: #1a2744;
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 10px;
-    padding: 4px;
-    z-index: 1000;
-    min-width: 140px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    animation: dropdownFadeIn 0.15s ease-out;
-  }
-  
-  @keyframes dropdownFadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  .expense-share-dropdown button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 10px 12px;
-    background: none;
-    border: none;
-    border-radius: 6px;
-    color: #e2e8f0;
-    font-size: 0.82rem;
-    cursor: pointer;
-    text-align: left;
-    white-space: nowrap;
-  }
-  
-  .expense-share-dropdown button:active {
-    background: rgba(45, 212, 191, 0.15);
-  }
-  
-  .expense-share-dropdown button svg {
-    color: #2dd4bf;
+    display: none !important;
   }
   
   /* Hide expand icon on mobile - use tap to expand */
@@ -4972,116 +4912,152 @@ html {
     -webkit-backdrop-filter: none !important;
   }
   
-  /* People page specific styles - SOLID backgrounds for mobile */
-  .panel.sidebar .panel.slim-card {
-    background: #0a0f1f !important; /* Solid background to prevent bleed-through */
-    border: none;
-    box-shadow: none;
-  }
+  /* ========================================
+     MOBILE PANELS - 100% SOLID BACKGROUNDS
+     No transparency, no blur, no bleed-through
+     ======================================== */
   
-  .panel.sidebar .panel-header {
-    padding: 8px 4px;
-    background: #0a0f1f !important;
-  }
-  
-  .panel.sidebar .list-stack {
-    max-height: none;
-    background: #0a0f1f !important;
-  }
-  
-  /* Friend/Group list items on mobile - SOLID backgrounds */
-  .friend-row,
-  .group-row {
-    padding: 10px 8px;
-    border-radius: 10px;
-    margin-bottom: 4px;
-    background: #131c2e !important; /* Solid dark background */
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  
-  .friend-row:active,
-  .group-row:active {
-    background: #1e293b !important;
-  }
-  
-  /* Ensure left panel (menu/more) also has solid backgrounds */
-  .panel.left-panel .panel.slim-card {
-    background: #0a0f1f !important;
-    border: none;
-    box-shadow: none;
-  }
-  
-  .panel.left-panel .balance-card-slide,
-  .panel.left-panel .monthly-summary-card,
-  .panel.left-panel .kpi-grid-home,
-  .panel.left-panel .activity-item {
-    background: #131c2e !important;
-  }
-  
-  /* All cards inside mobile panels - solid backgrounds */
+  /* Base solid background for ALL mobile panels */
   .panel.left-panel.mobile-open,
   .panel.sidebar.mobile-open {
-    background: #0a0f1f !important;
+    background: #080c18 !important; /* Even darker solid background */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
   
+  /* Kill ALL transparency inside mobile panels */
   .panel.left-panel.mobile-open *,
   .panel.sidebar.mobile-open * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
   
-  /* Glass cards in mobile panels - make them solid */
-  .panel.left-panel.mobile-open .glass-card,
-  .panel.sidebar.mobile-open .glass-card {
-    background: #131c2e !important;
-    backdrop-filter: none !important;
+  /* People panel (sidebar) - SOLID backgrounds */
+  .panel.sidebar.mobile-open .panel.slim-card {
+    background: #080c18 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
   
-  /* Balance cards in mobile left panel */
-  .panel.left-panel.mobile-open .balance-cards-container {
-    background: #0a0f1f !important;
+  .panel.sidebar.mobile-open .panel-header {
+    padding: 12px 8px;
+    background: #080c18 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
   
-  .panel.left-panel.mobile-open .balance-card-slide {
-    background: linear-gradient(145deg, #131c2e 0%, #0f172a 100%) !important;
+  .panel.sidebar.mobile-open .list-stack {
+    max-height: none;
+    background: #080c18 !important;
   }
   
-  /* KPI items in mobile */
-  .panel.left-panel.mobile-open .kpi-item {
-    background: #131c2e !important;
+  /* Friend/Group list items - SOLID backgrounds */
+  .panel.sidebar.mobile-open .friend-row,
+  .panel.sidebar.mobile-open .group-row {
+    padding: 12px 10px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   
-  .panel.left-panel.mobile-open .kpi-item:hover {
+  .panel.sidebar.mobile-open .friend-row:active,
+  .panel.sidebar.mobile-open .group-row:active {
     background: #1a2744 !important;
   }
   
-  /* Secondary KPIs */
-  .panel.left-panel.mobile-open .secondary-kpi {
-    background: #131c2e !important;
+  /* Sidebar header */
+  .panel.sidebar.mobile-open .sidebar-header {
+    background: #080c18 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 8px;
   }
   
-  /* Monthly summary */
-  .panel.left-panel.mobile-open .monthly-summary-card {
-    background: linear-gradient(145deg, #131c2e 0%, #0f172a 100%) !important;
+  /* Menu panel (left panel) - SOLID backgrounds */
+  .panel.left-panel.mobile-open .panel.slim-card {
+    background: #080c18 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
   
-  /* Activity items */
-  .panel.left-panel.mobile-open .activity-item {
-    background: #131c2e !important;
+  .panel.left-panel.mobile-open .panel-header {
+    background: #080c18 !important;
   }
   
-  /* Mobile quick actions */
+  /* Mobile quick actions - SOLID */
   .panel.left-panel.mobile-open .mobile-quick-actions {
-    background: #131c2e !important;
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+  }
+  
+  .panel.left-panel.mobile-open .mobile-user-info {
+    background: transparent !important;
   }
   
   .panel.left-panel.mobile-open .mobile-action-btn {
     background: #1a2744 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
   
   .panel.left-panel.mobile-open .mobile-actions-grid .nav-icon-pill,
   .panel.left-panel.mobile-open .mobile-actions-grid .chat-dropdown > button {
     background: #1a2744 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  
+  /* Balance cards - SOLID */
+  .panel.left-panel.mobile-open .balance-cards-container {
+    background: #080c18 !important;
+  }
+  
+  .panel.left-panel.mobile-open .balance-card-slide {
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* KPI items - SOLID */
+  .panel.left-panel.mobile-open .kpi-grid-home {
+    background: #080c18 !important;
+  }
+  
+  .panel.left-panel.mobile-open .kpi-item {
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  
+  /* Secondary KPIs - SOLID */
+  .panel.left-panel.mobile-open .secondary-kpis {
+    background: #080c18 !important;
+  }
+  
+  .panel.left-panel.mobile-open .secondary-kpi {
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  
+  /* Monthly summary - SOLID */
+  .panel.left-panel.mobile-open .monthly-summary-card {
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* Activity items - SOLID */
+  .panel.left-panel.mobile-open .recent-activity-section {
+    background: #080c18 !important;
+  }
+  
+  .panel.left-panel.mobile-open .activity-item {
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    margin-bottom: 4px;
+  }
+  
+  /* Glass cards - make them SOLID */
+  .panel.left-panel.mobile-open .glass-card,
+  .panel.sidebar.mobile-open .glass-card {
+    background: #101828 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
 
