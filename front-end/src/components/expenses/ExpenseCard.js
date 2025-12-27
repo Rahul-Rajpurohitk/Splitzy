@@ -1,6 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2, FiTrash2, FiCheckCircle, FiX, FiMoreVertical } from "react-icons/fi";
+import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2, FiTrash2, FiCheckCircle, FiX, FiMessageSquare } from "react-icons/fi";
 import ShareExpenseModal from "./ShareExpenseModal";
 import axios from "axios";
 import { fetchExpensesThunk } from "../../features/expense/expenseSlice";
@@ -79,7 +79,25 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   const [partialAmount, setPartialAmount] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showMobileShareDropdown, setShowMobileShareDropdown] = useState(false);
+  const shareDropdownRef = useRef(null);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (shareDropdownRef.current && !shareDropdownRef.current.contains(event.target)) {
+        setShowMobileShareDropdown(false);
+      }
+    };
+    if (showMobileShareDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showMobileShareDropdown]);
   
   // Swipe state
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -332,39 +350,29 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
             <FiShare2 size={16} />
           </button>
 
-          {/* Mobile: More menu button */}
-          <button 
-            className="expense-more-btn mobile-only"
-            onClick={(e) => { e.stopPropagation(); setShowMobileMenu(!showMobileMenu); }}
-          >
-            <FiMoreVertical size={18} />
-          </button>
+          {/* Mobile: Share dropdown button */}
+          <div className="expense-share-dropdown-wrapper mobile-only" ref={shareDropdownRef}>
+            <button 
+              className="expense-share-btn-mobile"
+              onClick={(e) => { e.stopPropagation(); setShowMobileShareDropdown(!showMobileShareDropdown); }}
+              title="Share options"
+            >
+              <FiShare2 size={16} />
+            </button>
+            {showMobileShareDropdown && (
+              <div className="expense-share-dropdown" onClick={(e) => e.stopPropagation()}>
+                <button onClick={(e) => { handleShareClick(e); setShowMobileShareDropdown(false); }}>
+                  <FiMessageSquare size={14} /> Share in Chat
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Expand indicator - Desktop only */}
           <div className="expense-expand desktop-only">
             {isExpanded ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
           </div>
         </div>
-
-        {/* Mobile dropdown menu - All actions in one place */}
-        {showMobileMenu && (
-          <div className="expense-mobile-menu" onClick={(e) => e.stopPropagation()}>
-            <button onClick={(e) => { e.stopPropagation(); setShowMobileMenu(false); onToggleExpand(); }}>
-              <FiChevronDown size={14} /> {isExpanded ? 'Hide Details' : 'View Details'}
-            </button>
-            <button onClick={(e) => { handleShareClick(e); setShowMobileMenu(false); }}>
-              <FiShare2 size={14} /> Share
-            </button>
-            {!expense.isSettled && myNet !== 0 && (
-              <button onClick={(e) => { handleSettleFull(e); setShowMobileMenu(false); }}>
-                <FiCheckCircle size={14} /> Mark as Paid
-              </button>
-            )}
-            <button className="danger" onClick={(e) => { handleDelete(e); setShowMobileMenu(false); }}>
-              <FiTrash2 size={14} /> Delete
-            </button>
-          </div>
-        )}
 
       {/* Share Modal */}
       {showShareModal && (

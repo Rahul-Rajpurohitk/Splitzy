@@ -4760,16 +4760,82 @@ html {
     text-overflow: ellipsis;
   }
   
-  /* Hide desktop share button, show mobile more button */
+  /* Hide desktop share button, show mobile share dropdown */
   .expense-share-btn.desktop-only {
     display: none !important;
   }
   
-  .expense-more-btn.mobile-only {
-    display: flex !important;
+  /* Mobile share dropdown wrapper */
+  .expense-share-dropdown-wrapper.mobile-only {
+    display: block !important;
+    position: relative;
   }
   
-  /* Hide expand icon when using dropdown */
+  /* Mobile share button - compact design */
+  .expense-share-btn-mobile {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+    background: rgba(45, 212, 191, 0.12);
+    color: #2dd4bf;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  
+  .expense-share-btn-mobile:active {
+    background: rgba(45, 212, 191, 0.25);
+    transform: scale(0.95);
+  }
+  
+  /* Share dropdown menu */
+  .expense-share-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #1a2744;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 4px;
+    z-index: 1000;
+    min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    animation: dropdownFadeIn 0.15s ease-out;
+  }
+  
+  @keyframes dropdownFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .expense-share-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+  }
+  
+  .expense-share-dropdown button:active {
+    background: rgba(45, 212, 191, 0.15);
+  }
+  
+  .expense-share-dropdown button svg {
+    color: #2dd4bf;
+  }
+  
+  /* Hide expand icon on mobile - use tap to expand */
   .expense-expand {
     display: none !important;
   }
@@ -4793,63 +4859,6 @@ html {
   /* When card is swiped, show actions */
   .expense-card-wrapper.swiped .swipe-actions {
     display: flex;
-  }
-  
-  /* Mobile dropdown menu */
-  .expense-mobile-menu {
-    position: absolute;
-    right: 8px;
-    top: calc(100% + 4px);
-    background: #1e293b;
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 12px;
-    padding: 4px;
-    z-index: 1000;
-    min-width: 160px;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
-  }
-  
-  .expense-mobile-menu button {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 12px 14px;
-    background: none;
-    border: none;
-    border-radius: 8px;
-    color: #e2e8f0;
-    font-size: 0.85rem;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.15s ease;
-  }
-  
-  .expense-mobile-menu button:active {
-    background: rgba(255,255,255,0.1);
-  }
-  
-  .expense-mobile-menu button.danger {
-    color: #ef4444;
-  }
-  
-  /* More button styling */
-  .expense-more-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.06);
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-  
-  .expense-more-btn:active {
-    background: rgba(255,255,255,0.12);
-    color: #fff;
   }
   
   /* Inline badges for mobile */
@@ -4963,34 +4972,116 @@ html {
     -webkit-backdrop-filter: none !important;
   }
   
-  /* People page specific styles */
+  /* People page specific styles - SOLID backgrounds for mobile */
   .panel.sidebar .panel.slim-card {
-    background: transparent;
+    background: #0a0f1f !important; /* Solid background to prevent bleed-through */
     border: none;
     box-shadow: none;
   }
   
   .panel.sidebar .panel-header {
     padding: 8px 4px;
+    background: #0a0f1f !important;
   }
   
   .panel.sidebar .list-stack {
     max-height: none;
+    background: #0a0f1f !important;
   }
   
-  /* Friend/Group list items on mobile */
+  /* Friend/Group list items on mobile - SOLID backgrounds */
   .friend-row,
   .group-row {
     padding: 10px 8px;
     border-radius: 10px;
     margin-bottom: 4px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: #131c2e !important; /* Solid dark background */
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   
   .friend-row:active,
   .group-row:active {
-    background: rgba(255, 255, 255, 0.1);
+    background: #1e293b !important;
+  }
+  
+  /* Ensure left panel (menu/more) also has solid backgrounds */
+  .panel.left-panel .panel.slim-card {
+    background: #0a0f1f !important;
+    border: none;
+    box-shadow: none;
+  }
+  
+  .panel.left-panel .balance-card-slide,
+  .panel.left-panel .monthly-summary-card,
+  .panel.left-panel .kpi-grid-home,
+  .panel.left-panel .activity-item {
+    background: #131c2e !important;
+  }
+  
+  /* All cards inside mobile panels - solid backgrounds */
+  .panel.left-panel.mobile-open,
+  .panel.sidebar.mobile-open {
+    background: #0a0f1f !important;
+  }
+  
+  .panel.left-panel.mobile-open *,
+  .panel.sidebar.mobile-open * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  
+  /* Glass cards in mobile panels - make them solid */
+  .panel.left-panel.mobile-open .glass-card,
+  .panel.sidebar.mobile-open .glass-card {
+    background: #131c2e !important;
+    backdrop-filter: none !important;
+  }
+  
+  /* Balance cards in mobile left panel */
+  .panel.left-panel.mobile-open .balance-cards-container {
+    background: #0a0f1f !important;
+  }
+  
+  .panel.left-panel.mobile-open .balance-card-slide {
+    background: linear-gradient(145deg, #131c2e 0%, #0f172a 100%) !important;
+  }
+  
+  /* KPI items in mobile */
+  .panel.left-panel.mobile-open .kpi-item {
+    background: #131c2e !important;
+  }
+  
+  .panel.left-panel.mobile-open .kpi-item:hover {
+    background: #1a2744 !important;
+  }
+  
+  /* Secondary KPIs */
+  .panel.left-panel.mobile-open .secondary-kpi {
+    background: #131c2e !important;
+  }
+  
+  /* Monthly summary */
+  .panel.left-panel.mobile-open .monthly-summary-card {
+    background: linear-gradient(145deg, #131c2e 0%, #0f172a 100%) !important;
+  }
+  
+  /* Activity items */
+  .panel.left-panel.mobile-open .activity-item {
+    background: #131c2e !important;
+  }
+  
+  /* Mobile quick actions */
+  .panel.left-panel.mobile-open .mobile-quick-actions {
+    background: #131c2e !important;
+  }
+  
+  .panel.left-panel.mobile-open .mobile-action-btn {
+    background: #1a2744 !important;
+  }
+  
+  .panel.left-panel.mobile-open .mobile-actions-grid .nav-icon-pill,
+  .panel.left-panel.mobile-open .mobile-actions-grid .chat-dropdown > button {
+    background: #1a2744 !important;
   }
 }
 
@@ -5024,6 +5115,11 @@ html {
   /* Show desktop-only elements */
   .desktop-only {
     display: flex !important;
+  }
+  
+  /* Hide mobile share dropdown on desktop */
+  .expense-share-dropdown-wrapper.mobile-only {
+    display: none !important;
   }
   
   /* Swipe actions hidden on desktop */
