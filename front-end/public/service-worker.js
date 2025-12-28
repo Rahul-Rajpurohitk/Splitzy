@@ -1,9 +1,10 @@
 /* eslint-env serviceworker */
 /* eslint-disable no-restricted-globals */
-// Splitzy Service Worker v1.0.0
-const CACHE_NAME = 'splitzy-cache-v1';
-const STATIC_CACHE = 'splitzy-static-v1';
-const DYNAMIC_CACHE = 'splitzy-dynamic-v1';
+// Splitzy Service Worker v1.0.1
+// Bump cache version when deploying to ensure old cached bundles are cleared.
+const CACHE_NAME = 'splitzy-cache-v2';
+const STATIC_CACHE = 'splitzy-static-v2';
+const DYNAMIC_CACHE = 'splitzy-dynamic-v2';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -90,12 +91,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets and navigation - Cache first, fall back to network
-  if (request.destination === 'document' || 
+  // IMPORTANT: Avoid cache-first for JS/CSS to prevent "refresh shows old version"
+  // after deploys. Use network-first for documents/styles/scripts.
+  if (request.destination === 'document' ||
       request.destination === 'script' ||
-      request.destination === 'style' ||
-      request.destination === 'image' ||
-      request.destination === 'font') {
+      request.destination === 'style') {
+    event.respondWith(networkFirstNoCache(request));
+    return;
+  }
+
+  // Images/fonts can remain cache-first for performance.
+  if (request.destination === 'image' || request.destination === 'font') {
     event.respondWith(cacheFirst(request));
     return;
   }
@@ -152,6 +158,22 @@ async function networkFirst(request) {
         headers: { 'Content-Type': 'application/json' }
       }
     );
+  }
+}
+
+// Network First (NO cache write) - for JS/CSS/HTML to always get latest on refresh
+async function networkFirstNoCache(request) {
+  try {
+    const networkResponse = await fetch(request, { cache: 'no-store' });
+    return networkResponse;
+  } catch (error) {
+    // Fallback to cache for offline navigation
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) return cachedResponse;
+    if (request.destination === 'document') {
+      return caches.match('/index.html');
+    }
+    throw error;
   }
 }
 
