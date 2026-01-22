@@ -2070,22 +2070,48 @@
   }
 }
 
-/* ========== FIX: KPI cards - ensure values always visible ========== */
+/* ========== COMPREHENSIVE FIX: KPI cards responsive at ALL screen sizes ========== */
+/* Override the fixed column grid with auto-fit for true responsiveness */
+.hero-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
+  gap: 8px !important;
+}
+
 .hero-kpi {
-  overflow: visible;
+  overflow: hidden;
   min-width: 0;
+  padding: 10px 8px !important;
+  gap: 6px !important;
 }
 
 .hero-kpi-content {
-  overflow: visible;
+  overflow: hidden;
   min-width: 0;
+  flex: 1;
 }
 
-/* KPI values should NEVER truncate - use font scaling instead */
+/* KPI values - scale font, but allow truncation as last resort */
 .hero-kpi-value {
-  font-size: clamp(0.9rem, 2vw, 1.4rem) !important;
-  white-space: nowrap;
-  overflow: visible !important;
+  font-size: clamp(0.85rem, 1.8vw, 1.15rem) !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* KPI labels - always allow truncation */
+.hero-kpi-label {
+  font-size: 0.55rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Emoji icon - smaller to save space */
+.hero-emoji {
+  font-size: 1.1rem !important;
+  flex-shrink: 0 !important;
 }
 
 /* ========== FIX: Chart panel and section header overflow ========== */
@@ -2144,21 +2170,7 @@
   text-overflow: ellipsis;
 }
 
-/* ========== FIX: Better KPI scaling when space is constrained ========== */
-@media (min-width: 769px) {
-  .hero-kpi {
-    min-width: 0;
-    flex: 1;
-  }
-
-  /* Labels can truncate, but values must NEVER truncate */
-  .hero-kpi-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.6rem;
-  }
-}
+/* Desktop-specific KPI adjustments removed - using universal responsive rules above */
 
 /* ========== FIX: Personal vs Shared card - responsive layout ========== */
 .expense-type-compact {
