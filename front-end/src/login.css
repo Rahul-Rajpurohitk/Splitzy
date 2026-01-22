@@ -30,6 +30,40 @@ body {
   color: var(--text-dark);
 }
 
+/* Mobile: Auth pages MUST scroll - highest priority */
+@media (max-width: 768px) {
+  html, body, #root {
+    position: static !important;
+    overflow: visible !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  body {
+    /* Override any fixed positioning from dashboard styles */
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    width: auto !important;
+  }
+  
+  .auth-shell {
+    min-height: 100vh;
+    height: auto !important;
+    overflow: visible !important;
+    display: flex;
+    flex-direction: column;
+    position: relative !important;
+  }
+  
+  .auth-card {
+    margin-bottom: 2rem; /* Extra space at bottom for scrolling */
+  }
+}
+
 .auth-shell::before {
   content: "";
   position: fixed;

@@ -91,17 +91,24 @@ public class FriendService {
 
         // In sendFriendRequest method:
         try {
-            // Build and emit a Socket.IO event to the receiver's room (using their email)
+            // Build and emit a Socket.IO event
             FriendRequestData data = new FriendRequestData();
             data.setType("FRIEND_REQUEST_SENT");
             data.setRequestId(savedDto.getId());
             data.setSenderId(senderId);
             data.setReceiverId(receiverId);
-            socketIOServer.getRoomOperations(receiver.getEmail()).sendEvent("friendRequest", data);
-            logger.info("[FriendService] Socket.IO event sent to room: {}", receiver.getEmail());
             
-            // Also publish to SQS for guaranteed delivery
+            // Send to receiver's room
+            socketIOServer.getRoomOperations(receiver.getEmail()).sendEvent("friendRequest", data);
+            logger.info("[FriendService] Socket.IO event sent to receiver room: {}", receiver.getEmail());
+            
+            // Also send to sender's room for multi-device sync (sender's other devices should see the sent request)
+            socketIOServer.getRoomOperations(sender.getEmail()).sendEvent("friendRequest", data);
+            logger.info("[FriendService] Socket.IO event sent to sender room for multi-device sync: {}", sender.getEmail());
+            
+            // Also publish to SQS for guaranteed delivery to both
             sqsEventPublisher.publishFriendRequestEvent(receiver.getEmail(), data);
+            sqsEventPublisher.publishFriendRequestEvent(sender.getEmail(), data);
         } catch (Exception e) {
             logger.error("[FriendService] Error sending WebSocket message: ", e);
         }

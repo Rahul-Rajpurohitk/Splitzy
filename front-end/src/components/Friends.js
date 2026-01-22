@@ -5,7 +5,13 @@ import axios from 'axios';
 import { FiMessageCircle, FiX } from 'react-icons/fi';
 import { setExpenseFilter } from '../features/expense/expenseSlice'; // New action
 
-function Friends({ onOpenChat }) {
+function Friends({ 
+  onOpenChat, 
+  isMobile = false,
+  externalTriggerAdd = false,
+  onAddModalClosed,
+  hideHeader = false
+}) {
   const dispatch = useDispatch();
   const [friends, setFriends] = useState([]);  // array of friend objects { id, name, ... }
   const [showAddModal, setShowAddModal] = useState(false);
@@ -19,20 +25,28 @@ function Friends({ onOpenChat }) {
   const token = localStorage.getItem('splitzyToken');
   const userId = localStorage.getItem('myUserId');
   
+  // Handle external trigger to open add modal
+  useEffect(() => {
+    if (externalTriggerAdd) {
+      window.dispatchEvent(new CustomEvent('modalOpened'));
+      setShowAddModal(true);
+    }
+  }, [externalTriggerAdd]);
+  
   // Handle opening chat with a friend
   const handleOpenFriendChat = async (friend, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (!onOpenChat) return;
     
     try {
       // Create or get existing P2P thread with this friend
       const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/chat/p2p?userId1=${userId}&userId2=${friend.id}`,
-        {},
+        `${process.env.REACT_APP_API_URL}/chat/threads/p2p`,
+        { friendId: friend.id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      const thread = response.data;
+      const thread = { ...response.data, displayName: friend.name };
       onOpenChat(thread);
     } catch (error) {
       console.error('Error opening chat:', error);
@@ -168,32 +182,55 @@ function Friends({ onOpenChat }) {
   // Show all friends (scrollable list)
   const topFriends = friends;
 
-    // NEW: Friend click handler to set the expense filter
-  const handleFriendClick = (friend) => {
-    // Dispatch our new expense filter with filterType "contact" (or "friend") and the friend object.
-    dispatch(setExpenseFilter({ filterType: "friend", filterEntity: friend }));
+  // Friend click handler - different behavior for mobile vs desktop
+  const handleFriendClick = async (friend) => {
+    if (isMobile && onOpenChat) {
+      // On mobile, clicking the row opens chat
+      await handleOpenFriendChat(friend);
+    } else {
+      // On desktop, clicking the row filters expenses
+      dispatch(setExpenseFilter({ filterType: "friend", filterEntity: friend }));
+    }
+  };
+
+  // Close modal handler with callback
+  const handleCloseAddModal = () => {
+    setShowAddModal(false);
+    setSearchTerm('');
+    setSearchResults([]);
+    setShowResults(false);
+    if (onAddModalClosed) onAddModalClosed();
   };
 
   return (
-    <div className="panel slim-card">
-      <div className="panel-header">
-        <span>Friends</span>
-        <button className="chip ghost" onClick={() => {
-          window.dispatchEvent(new CustomEvent('modalOpened'));
-          setShowAddModal(true);
-        }}>+ Add</button>
-      </div>
-      <div className="panel-divider" />
+    <div className={`panel slim-card ${hideHeader ? 'no-header' : ''}`}>
+      {!hideHeader && (
+        <>
+          <div className="panel-header">
+            <span>Friends</span>
+            <button className="chip ghost" onClick={() => {
+              window.dispatchEvent(new CustomEvent('modalOpened'));
+              setShowAddModal(true);
+            }}>+ Add</button>
+          </div>
+          <div className="panel-divider" />
+        </>
+      )}
       <ul className="list-stack compact">
         {topFriends.length > 0 ? (
           topFriends.map((friend) => (
-            <li key={friend.id} className="list-row friend-row" onClick={() => handleFriendClick(friend)}>
+            <li 
+              key={friend.id} 
+              className={`list-row friend-row ${isMobile ? 'mobile-clickable' : ''}`} 
+              onClick={() => handleFriendClick(friend)}
+            >
               <div className="avatar-sm">{friend.name?.[0] || "F"}</div>
               <span className="row-name">{friend.name}</span>
               <div className="friend-actions">
-                {onOpenChat && (
+                {/* Only show chat button on desktop */}
+                {!isMobile && onOpenChat && (
                   <button
-                    className="friend-chat-btn"
+                    className="friend-chat-btn desktop-only"
                     onClick={(e) => handleOpenFriendChat(friend, e)}
                     title="Send message"
                   >
@@ -223,7 +260,7 @@ function Friends({ onOpenChat }) {
           <div className="glass-card modal-card-sm elevated floating">
             <div className="modal-header-bar">
               <h3>Invite friends</h3>
-              <button className="close-btn" onClick={() => setShowAddModal(false)}>×</button>
+              <button className="close-btn" onClick={handleCloseAddModal}>×</button>
             </div>
             <div className="modal-body">
               <input
@@ -249,15 +286,7 @@ function Friends({ onOpenChat }) {
               </div>
             </div>
             <div className="modal-actions">
-              <button
-                className="chip ghost"
-                onClick={() => {
-                  setShowAddModal(false);
-                  setSearchTerm('');
-                  setSearchResults([]);
-                  setShowResults(false);
-                }}
-              >
+              <button className="chip ghost" onClick={handleCloseAddModal}>
                 Close
               </button>
             </div>

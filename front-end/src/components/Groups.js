@@ -5,7 +5,13 @@ import axios from 'axios';
 import { FiMessageCircle } from 'react-icons/fi';
 import { setExpenseFilter } from '../features/expense/expenseSlice';  // New action
 
-const Groups = ({ onOpenChat }) => {
+const Groups = ({ 
+  onOpenChat, 
+  isMobile = false,
+  externalTriggerAdd = false,
+  onAddModalClosed,
+  hideHeader = false
+}) => {
   const [showModal, setShowModal] = useState(false);
   const [groups, setGroups] = useState([]);
 
@@ -15,19 +21,34 @@ const Groups = ({ onOpenChat }) => {
   const token = localStorage.getItem('splitzyToken');
   const currentUserId = localStorage.getItem('myUserId');
   
-  // Handle opening group chat
+  // Handle external trigger to open add modal
+  useEffect(() => {
+    if (externalTriggerAdd) {
+      window.dispatchEvent(new CustomEvent('modalOpened'));
+      setShowModal(true);
+    }
+  }, [externalTriggerAdd]);
+  
+  // Handle modal close with callback
+  const handleCloseModal = () => {
+    setShowModal(false);
+    if (onAddModalClosed) onAddModalClosed();
+  };
+  
+  // Handle opening group chat (desktop button click)
   const handleOpenGroupChat = async (group, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (!onOpenChat) return;
     
     try {
       // Create or get existing group thread
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/chat/group/${group.id}/thread`,
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL}/chat/threads/group`,
+        { groupId: group.id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      const thread = response.data;
+      const thread = { ...response.data, displayName: group.groupName };
       onOpenChat(thread);
     } catch (error) {
       console.error('Error opening group chat:', error);
@@ -49,19 +70,28 @@ const Groups = ({ onOpenChat }) => {
     fetchGroups();
   }, []);
 
-  // Refresh on socket group invite
+  // Refresh on socket group invite or group created (for multi-device sync)
   useEffect(() => {
     if (!lastEvent) return;
 
-    if (lastEvent.eventType === "GROUP_INVITE" && lastEvent.payload.type === "GROUP_INVITE") {
-      console.log("[Groups] Detected GROUP_INVITE event — refreshing group list");
-      fetchGroups();
+    if (lastEvent.eventType === "GROUP_INVITE") {
+      // GROUP_INVITE for invited friends, GROUP_CREATED for the creator's other devices
+      if (lastEvent.payload.type === "GROUP_INVITE" || lastEvent.payload.type === "GROUP_CREATED") {
+        console.log("[Groups] Detected GROUP event — refreshing group list", lastEvent.payload.type);
+        fetchGroups();
+      }
     }
   }, [lastEvent]);
 
-  // NEW: Group click handler to set the expense filter
-  const handleGroupClick = (group) => {
-    dispatch(setExpenseFilter({ filterType: "group", filterEntity: group }));
+  // Group click handler - different behavior for mobile vs desktop
+  const handleGroupClick = async (group) => {
+    if (isMobile && onOpenChat) {
+      // On mobile, clicking the row opens chat
+      await handleOpenGroupChat(group);
+    } else {
+      // On desktop, clicking the row filters expenses
+      dispatch(setExpenseFilter({ filterType: "group", filterEntity: group }));
+    }
   };
 
   // Function to update groups when a new group is created.
@@ -71,29 +101,34 @@ const Groups = ({ onOpenChat }) => {
   };
 
   return (
-    <div className="panel slim-card">
-      <div className="panel-header">
-        <span>Groups</span>
-        <button className="chip ghost" onClick={() => {
-          window.dispatchEvent(new CustomEvent('modalOpened'));
-          setShowModal(true);
-        }}>+ Add</button>
-      </div>
-      <div className="panel-divider" />
+    <div className={`panel slim-card ${hideHeader ? 'no-header' : ''}`}>
+      {!hideHeader && (
+        <>
+          <div className="panel-header">
+            <span>Groups</span>
+            <button className="chip ghost" onClick={() => {
+              window.dispatchEvent(new CustomEvent('modalOpened'));
+              setShowModal(true);
+            }}>+ Add</button>
+          </div>
+          <div className="panel-divider" />
+        </>
+      )}
       <ul className="list-stack compact">
         {groups.length ? (
           groups.map((group) => (
             <li
               key={group.id}
-              className="list-row group-row"
+              className={`list-row group-row ${isMobile ? 'mobile-clickable' : ''}`}
               onClick={() => handleGroupClick(group)}
             >
               <div className="avatar-sm">{group.groupName?.[0] || "G"}</div>
               <span className="row-name">{group.groupName}</span>
               <div className="group-actions">
-                {onOpenChat && (
+                {/* Only show chat button on desktop */}
+                {!isMobile && onOpenChat && (
                   <button
-                    className="group-chat-btn"
+                    className="group-chat-btn desktop-only"
                     onClick={(e) => handleOpenGroupChat(group, e)}
                     title="Group chat"
                   >
@@ -105,11 +140,11 @@ const Groups = ({ onOpenChat }) => {
             </li>
           ))
         ) : (
-          <p className="muted small">No Groups Yet</p>
+          <p className="muted small no-items-msg">No groups yet. Create one!</p>
         )}
       </ul>
       {showModal && (
-        <AddGroupModal onClose={() => setShowModal(false)} onSave={handleAddGroup} />
+        <AddGroupModal onClose={handleCloseModal} onSave={handleAddGroup} />
       )}
     </div>
   );

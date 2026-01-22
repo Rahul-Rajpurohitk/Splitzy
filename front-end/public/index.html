@@ -12,7 +12,7 @@
     
     <!-- iOS PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Splitzy" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     
@@ -44,11 +44,18 @@
     
     <title>Splitzy - Expense Sharing Made Easy</title>
     
-    <!-- Splash screen styles for iOS -->
+    <!-- Splash screen styles for iOS - SOLID backgrounds to prevent wallpaper bleed -->
     <style>
-      /* iOS splash screen background */
-      html, body {
-        background-color: #0f172a;
+      /* iOS splash screen background - SOLID dark color */
+      html, body, #root {
+        background: #0a0f1f !important;
+        background-color: #0a0f1f !important;
+        min-height: 100vh;
+        min-height: -webkit-fill-available;
+      }
+      /* Prevent transparency on iOS Safari */
+      * {
+        -webkit-tap-highlight-color: transparent;
       }
       /* Safe area padding for notched devices */
       .safe-area-top {

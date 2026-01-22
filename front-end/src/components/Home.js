@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
@@ -13,7 +14,7 @@ import Groups from './Groups';
 import ProfilePanel from './ProfilePanel';
 import { 
   FiHome, FiBarChart2, FiUsers, FiX, FiClock, 
-  FiChevronDown, FiChevronUp, FiTrendingUp, FiPlus, FiMenu
+  FiChevronDown, FiChevronUp, FiTrendingUp, FiPlus, FiMenu, FiArrowLeft
 } from 'react-icons/fi';
 import ChatDropdown from './chat/ChatDropdown';
 import ChatWindow from './chat/ChatWindow';
@@ -88,18 +89,65 @@ function Home() {
   const token = localStorage.getItem('splitzyToken');
 
   const [showUserMenu, setShowUserMenu] = useState(false);
+  // selectedView now includes: 'dashboard', 'analytics', 'profile', 'settings', 'people', 'menu', 'chat'
   const [selectedView, setSelectedView] = useState('dashboard');
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [openChats, setOpenChats] = useState([]);
-  
-  // Mobile navigation state
-  const [mobileLeftPanel, setMobileLeftPanel] = useState(false);
-  const [mobileRightPanel, setMobileRightPanel] = useState(false);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [mobileChatThread, setMobileChatThread] = useState(null); // For full-page mobile chat
+  
+  // People page tab state (mobile)
+  const [peopleTab, setPeopleTab] = useState('friends'); // 'friends' or 'groups'
+  const [triggerAddFriend, setTriggerAddFriend] = useState(false);
+  const [triggerAddGroup, setTriggerAddGroup] = useState(false);
+  
+  // Detect if mobile
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  // Add body class when People/Chat page is active (for disabling background scroll)
+  useEffect(() => {
+    if (selectedView === 'people' || selectedView === 'chat') {
+      document.body.classList.add('mobile-overlay-active');
+    } else {
+      document.body.classList.remove('mobile-overlay-active');
+    }
+    return () => document.body.classList.remove('mobile-overlay-active');
+  }, [selectedView]);
   
   // Recent activity state
   const [recentActivity, setRecentActivity] = useState([]);
   const [activityExpanded, setActivityExpanded] = useState(true);
+  
+  // Add dashboard-active class to body for mobile scroll lock (auth pages should scroll)
+  // Also trigger a viewport recalculation for iOS Safari
+  useEffect(() => {
+    document.body.classList.add('dashboard-active');
+    
+    // Fix for iOS Safari viewport issues on initial load
+    const fixViewport = () => {
+      // Force a reflow to fix iOS viewport calculation
+      window.scrollTo(0, 0);
+      document.body.style.height = '100%';
+      document.body.style.overflow = 'hidden';
+    };
+    
+    // Run immediately and after a short delay (for iOS Safari)
+    fixViewport();
+    const timer = setTimeout(fixViewport, 100);
+    
+    return () => {
+      clearTimeout(timer);
+      document.body.classList.remove('dashboard-active');
+      document.body.style.height = '';
+      document.body.style.overflow = '';
+    };
+  }, []);
   
   // Listen for socket events to update recent activity in real-time
   const lastEvent = useSelector((state) => state.socket.lastEvent);
@@ -152,6 +200,17 @@ function Home() {
       }
       return [...prev, { thread, minimized: false }];
     });
+  };
+
+  // Mobile full-page chat handler
+  const handleMobileOpenChat = (thread) => {
+    setMobileChatThread(thread);
+    setSelectedView('chat');
+  };
+
+  const handleMobileCloseChat = () => {
+    setMobileChatThread(null);
+    setSelectedView('people');
   };
 
   const handleCloseChat = (threadId) => {
@@ -416,50 +475,8 @@ function Home() {
       </header>
 
         <div className={`main-grid ${!showRightPanel ? 'right-panel-hidden' : ''}`}>
-          {/* Left Panel - Balance & Activity */}
-          <aside className={`panel left-panel ${mobileLeftPanel ? 'mobile-open' : ''}`}>
-            <div className="panel-header">
-              <span>Menu</span>
-              <button className="mobile-panel-close" onClick={() => setMobileLeftPanel(false)}>
-                <FiX size={20} />
-              </button>
-            </div>
-            
-            {/* Mobile Quick Actions - only visible on mobile */}
-            <div className="mobile-quick-actions">
-              <div className="mobile-user-info">
-                <div className="avatar">
-                  {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
-                </div>
-                <div className="mobile-user-details">
-                  <span className="mobile-user-name">{username || 'You'}</span>
-                  <span className="mobile-user-email">{localStorage.getItem('myUserEmail') || ''}</span>
-                </div>
-              </div>
-              <div className="mobile-actions-grid">
-                <ChatDropdown onSelectThread={(t) => { 
-                  handleOpenChat(t); 
-                  setMobileLeftPanel(false);
-                }} />
-                <Notification />
-                <button 
-                  className="mobile-action-btn"
-                  onClick={() => { setSelectedView('profile'); setMobileLeftPanel(false); }}
-                >
-                  <span className="mobile-action-icon">👤</span>
-                  <span>Profile</span>
-                </button>
-                <button 
-                  className="mobile-action-btn danger"
-                  onClick={handleLogout}
-                >
-                  <span className="mobile-action-icon">🚪</span>
-                  <span>Logout</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className="panel-divider mobile-only" />
+          {/* Left Panel - Balance & Activity (Desktop only, hidden on mobile) */}
+          <aside className="panel left-panel desktop-only">
             
             <div className="panel-header">
               <span>Your Balance</span>
@@ -633,7 +650,7 @@ function Home() {
             </div>
         </aside>
 
-          {/* Center Panel - Expenses / Analytics / Profile */}
+          {/* Center Panel - Expenses / Analytics / Profile / People / Menu */}
           <section className="panel center-panel">
             {selectedView === 'dashboard' && (
               <ExpenseCenter 
@@ -654,17 +671,212 @@ function Home() {
                 }}
               />
             )}
-        </section>
+            
+            {/* Mobile People View - Via Portal for true edge-to-edge */}
+            {selectedView === 'people' && createPortal(
+              <div className="mobile-people-container">
+                <div className="mobile-people-page">
+                  {/* Tab Header */}
+                  <div className="people-tabs-header">
+                    <button 
+                      className={`people-tab-btn ${peopleTab === 'friends' ? 'active' : ''}`}
+                      onClick={() => setPeopleTab('friends')}
+                    >
+                      Friends
+                    </button>
+                    <button 
+                      className={`people-tab-btn ${peopleTab === 'groups' ? 'active' : ''}`}
+                      onClick={() => setPeopleTab('groups')}
+                    >
+                      Groups
+                    </button>
+                  </div>
+                  
+                  {/* Tab Content */}
+                  <div className="people-tab-content">
+                    {peopleTab === 'friends' && (
+                      <Friends 
+                        onOpenChat={(thread) => {
+                          console.log('[People] Opening chat:', thread);
+                          handleMobileOpenChat(thread);
+                        }}
+                        isMobile={true}
+                        externalTriggerAdd={triggerAddFriend}
+                        onAddModalClosed={() => setTriggerAddFriend(false)}
+                        hideHeader={true}
+                      />
+                    )}
+                    {peopleTab === 'groups' && (
+                      <Groups 
+                        onOpenChat={(thread) => {
+                          console.log('[People] Opening group chat:', thread);
+                          handleMobileOpenChat(thread);
+                        }}
+                        isMobile={true}
+                        externalTriggerAdd={triggerAddGroup}
+                        onAddModalClosed={() => setTriggerAddGroup(false)}
+                        hideHeader={true}
+                      />
+                    )}
+                  </div>
+                  
+                  {/* FAB inside container */}
+                  <button 
+                    className="people-fab"
+                    onClick={() => {
+                      if (peopleTab === 'friends') {
+                        setTriggerAddFriend(true);
+                      } else {
+                        setTriggerAddGroup(true);
+                      }
+                    }}
+                  >
+                    <FiPlus size={18} />
+                    <span>Add {peopleTab === 'friends' ? 'Friend' : 'Group'}</span>
+                  </button>
+                </div>
+              </div>,
+              document.body
+            )}
+            
+            {/* Mobile Full-Page Chat View - Using Portal */}
+            {selectedView === 'chat' && mobileChatThread && createPortal(
+              <div className="mobile-chat-fullscreen">
+                <ChatWindow
+                  thread={mobileChatThread}
+                  onClose={handleMobileCloseChat}
+                  onMinimize={handleMobileCloseChat}
+                  minimized={false}
+                  isMobileFullPage={true}
+                />
+              </div>,
+              document.body
+            )}
+            
+            {/* Mobile Menu View */}
+            {selectedView === 'menu' && (
+              <div className="mobile-page-view">
+                <div className="mobile-page-header">
+                  <h2>Menu</h2>
+                </div>
+                
+                {/* User Info */}
+                <div className="mobile-menu-user">
+                  <div className="avatar avatar-lg">
+                    {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
+                  </div>
+                  <div className="mobile-menu-user-details">
+                    <span className="mobile-menu-user-name">{username || 'You'}</span>
+                    <span className="mobile-menu-user-email">{localStorage.getItem('myUserEmail') || ''}</span>
+                  </div>
+                </div>
+                
+                {/* Quick Actions */}
+                <div className="mobile-menu-actions">
+                  <button className="mobile-menu-btn" onClick={() => setSelectedView('profile')}>
+                    <span className="mobile-menu-btn-icon">👤</span>
+                    <span>Profile</span>
+                  </button>
+                  <ChatDropdown onSelectThread={(t) => { 
+                    handleOpenChat(t); 
+                    setSelectedView('dashboard');
+                  }} />
+                  <Notification />
+                  <button className="mobile-menu-btn danger" onClick={handleLogout}>
+                    <span className="mobile-menu-btn-icon">🚪</span>
+                    <span>Logout</span>
+                  </button>
+                </div>
+                
+                <div className="panel-divider" />
+                
+                {/* Balance Cards */}
+                <div className="mobile-menu-section">
+                  <h3>Your Balance</h3>
+                  <div className="balance-cards-container">
+                    <div className="balance-cards-wrapper">
+                      <div 
+                        className="balance-cards-scroll" 
+                        style={{ transform: `translateX(-${balanceCardIndex * 100}%)` }}
+                      >
+                        <div className={`balance-card-slide ${balanceStatus}`}>
+                          <div className="balance-header">
+                            <span className="balance-icon" style={{ color: balanceColor }}>{balanceIcon}</span>
+                            <span className="balance-title">Shared Balance</span>
+                          </div>
+                          <div className="balance-amount" style={{ color: balanceColor }}>
+                            {safeNumber(balanceData.sharedBalance) >= 0 ? '+' : '-'}${safeFixed(Math.abs(safeNumber(balanceData.sharedBalance)))}
+                          </div>
+                          <div className="balance-breakdown">
+                            <div className="breakdown-item positive">
+                              <span className="bd-label">You're owed</span>
+                              <span className="bd-value">${safeFixed(balanceData.sharedOwed)}</span>
+                            </div>
+                            <div className="breakdown-item negative">
+                              <span className="bd-label">You owe</span>
+                              <span className="bd-value">${safeFixed(balanceData.sharedOwing)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="balance-card-slide personal">
+                          <div className="balance-header">
+                            <span className="balance-icon" style={{ color: '#818cf8' }}>💰</span>
+                            <span className="balance-title">Personal Spending</span>
+                          </div>
+                          <div className="balance-amount" style={{ color: '#818cf8' }}>
+                            ${safeFixed(balanceData.personalTotal)}
+                          </div>
+                          <div className="balance-breakdown">
+                            <div className="breakdown-item">
+                              <span className="bd-label">This month</span>
+                              <span className="bd-value">${safeFixed(statsData.personalThisMonth, 0)}</span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span className="bd-label">Avg expense</span>
+                              <span className="bd-value">${safeFixed(statsData.avgPersonalExpense, 0)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="balance-dots">
+                      <button 
+                        className={`balance-dot ${balanceCardIndex === 0 ? 'active' : ''}`}
+                        onClick={() => setBalanceCardIndex(0)}
+                      />
+                      <button 
+                        className={`balance-dot ${balanceCardIndex === 1 ? 'active' : ''}`}
+                        onClick={() => setBalanceCardIndex(1)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* This Month Stats */}
+                <div className="mobile-menu-section">
+                  <h3>This Month</h3>
+                  <div className="monthly-summary-card">
+                    <div className="monthly-amount">${safeFixed(statsData.thisMonthTotal, 0)}</div>
+                    <div className="monthly-comparison">
+                      {safeNumber(statsData.monthOverMonth) !== 0 && (
+                        <span className={`trend-badge ${safeNumber(statsData.monthOverMonth) > 0 ? 'up' : 'down'}`}>
+                          {safeNumber(statsData.monthOverMonth) > 0 ? '↑' : '↓'} {safeFixed(Math.abs(safeNumber(statsData.monthOverMonth)), 0)}%
+                        </span>
+                      )}
+                      <span className="vs-last">vs last month</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
 
-          {/* Right Panel - Friends & Groups */}
-          <aside className={`panel sidebar ${!showRightPanel ? 'panel-collapsed' : ''} ${mobileRightPanel ? 'mobile-open' : ''}`}>
+          {/* Right Panel - Friends & Groups (Desktop only) */}
+          <aside className={`panel sidebar desktop-only ${!showRightPanel ? 'panel-collapsed' : ''}`}>
             {showRightPanel && (
               <>
                 <div className="sidebar-header">
                   <span className="sidebar-title">People</span>
-                  <button className="mobile-panel-close" onClick={() => setMobileRightPanel(false)}>
-                    <FiX size={20} />
-                  </button>
                   <button 
                     className="sidebar-close-btn"
                     onClick={() => setShowRightPanel(false)}
@@ -672,13 +884,13 @@ function Home() {
                   >
                     <FiX size={14} />
                   </button>
-          </div>
+                </div>
                 <Friends onOpenChat={handleOpenChat} />
                 <div className="panel-divider" />
                 <Groups onOpenChat={handleOpenChat} />
               </>
             )}
-        </aside>
+          </aside>
         </div>
         {/* Multiple chat windows */}
         <div className="chat-windows-container">
@@ -709,15 +921,15 @@ function Home() {
         {/* Mobile Bottom Navigation */}
         <nav className="mobile-bottom-nav">
           <button 
-            className={`mobile-nav-item ${selectedView === 'dashboard' && !mobileLeftPanel && !mobileRightPanel ? 'active' : ''}`}
-            onClick={() => { setSelectedView('dashboard'); setMobileLeftPanel(false); setMobileRightPanel(false); }}
+            className={`mobile-nav-item ${selectedView === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setSelectedView('dashboard')}
           >
             <FiHome size={20} />
             <span>Home</span>
           </button>
           <button 
             className={`mobile-nav-item ${selectedView === 'analytics' ? 'active' : ''}`}
-            onClick={() => { setSelectedView('analytics'); setMobileLeftPanel(false); setMobileRightPanel(false); }}
+            onClick={() => setSelectedView('analytics')}
           >
             <FiBarChart2 size={20} />
             <span>Stats</span>
@@ -729,28 +941,20 @@ function Home() {
             <FiPlus size={22} />
           </button>
           <button 
-            className={`mobile-nav-item ${mobileRightPanel ? 'active' : ''}`}
-            onClick={() => { setMobileRightPanel(!mobileRightPanel); setMobileLeftPanel(false); }}
+            className={`mobile-nav-item ${selectedView === 'people' ? 'active' : ''}`}
+            onClick={() => setSelectedView('people')}
           >
             <FiUsers size={20} />
             <span>People</span>
           </button>
           <button 
-            className={`mobile-nav-item ${mobileLeftPanel ? 'active' : ''}`}
-            onClick={() => { setMobileLeftPanel(!mobileLeftPanel); setMobileRightPanel(false); }}
+            className={`mobile-nav-item ${selectedView === 'menu' ? 'active' : ''}`}
+            onClick={() => setSelectedView('menu')}
           >
             <FiMenu size={20} />
             <span>Menu</span>
           </button>
         </nav>
-        
-        {/* Mobile Panel Overlay */}
-        {(mobileLeftPanel || mobileRightPanel) && (
-          <div 
-            className="mobile-panel-overlay" 
-            onClick={() => { setMobileLeftPanel(false); setMobileRightPanel(false); }}
-          />
-        )}
       </div>
     </div>
   );

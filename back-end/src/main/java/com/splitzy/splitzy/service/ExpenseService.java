@@ -541,19 +541,32 @@ public class ExpenseService {
 
             Set<String> targetEmails = new HashSet<>();
 
-            // Direct Socket.IO broadcast (instant, best-effort)
+            // ALWAYS include the creator first - ensures creator gets notified on all their devices
+            UserDto creator = userDao.findById(creatorId).orElse(null);
+            if (creator != null) {
+                String creatorEmail = creator.getEmail();
+                targetEmails.add(creatorEmail);
+                socketIOServer.getRoomOperations(creatorEmail)
+                        .sendEvent("expenseEvent", data);
+                logger.info("[ExpenseService] Socket.IO event [EXPENSE_CREATED] sent to creator room: {}", creatorEmail);
+            }
+
+            // Direct Socket.IO broadcast to all participants (instant, best-effort)
             for (Participant p : expense.getParticipants()) {
                 UserDto user = userDao.findById(p.getUserId()).orElse(null);
                 if (user != null) {
                     String email = user.getEmail();
-                    targetEmails.add(email);
-                    socketIOServer.getRoomOperations(email)
-                            .sendEvent("expenseEvent", data);
-                    logger.info("[ExpenseService] Socket.IO event [EXPENSE_CREATED] sent to room: {}", email);
+                    // Avoid duplicate sends if participant is the creator
+                    if (!targetEmails.contains(email)) {
+                        targetEmails.add(email);
+                        socketIOServer.getRoomOperations(email)
+                                .sendEvent("expenseEvent", data);
+                        logger.info("[ExpenseService] Socket.IO event [EXPENSE_CREATED] sent to room: {}", email);
+                    }
                 }
             }
 
-            // Also publish to SQS for guaranteed delivery
+            // Also publish to SQS for guaranteed delivery (includes creator + all participants)
             sqsEventPublisher.publishExpenseEvent(targetEmails, data);
 
         } catch (Exception e) {

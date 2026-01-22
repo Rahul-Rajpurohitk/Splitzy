@@ -318,20 +318,19 @@ public class ChatService {
         System.out.println("[ChatService] Clients in thread room 'thread:" + threadId + "': " + clientsInRoom);
         socketIOServer.getRoomOperations("thread:" + threadId).sendEvent("chat:new_message", msg);
         
-        // Also send to each participant's email room (for notification badges)
+        // Send to ALL participants' email rooms (for notification badges and multi-device sync)
+        // Previously excluded sender, but this broke multi-device scenarios where sender's 
+        // other devices wouldn't get updates. Frontend should filter out self-notifications.
         Set<String> targetEmails = new HashSet<>();
         threadRepo.findById(threadId).ifPresent(thread -> {
             System.out.println("[ChatService] Thread participants: " + thread.getParticipantIds());
             for (String participantId : thread.getParticipantIds()) {
-                // Don't notify the sender
-                if (!participantId.equals(msg.getSenderId())) {
                     userDao.findById(participantId).ifPresent(user -> {
                         targetEmails.add(user.getEmail());
                         int emailRoomClients = socketIOServer.getRoomOperations(user.getEmail()).getClients().size();
                         System.out.println("[ChatService] Sending notification to " + user.getEmail() + " (clients: " + emailRoomClients + ")");
                         socketIOServer.getRoomOperations(user.getEmail()).sendEvent("chat:notification", msg);
                     });
-                }
             }
         });
         

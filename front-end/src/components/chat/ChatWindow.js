@@ -12,7 +12,7 @@ const CATEGORY_ICONS = {
   music: "🎵", other: "📝"
 };
 
-function ChatWindow({ thread, minimized, rightPosition = 20, onClose, onMinimize, onExpand }) {
+function ChatWindow({ thread, minimized, rightPosition = 20, onClose, onMinimize, onExpand, isMobileFullPage = false }) {
   const token = localStorage.getItem("splitzyToken");
   const myUserId = localStorage.getItem("myUserId");
   const [messages, setMessages] = useState([]);
@@ -210,15 +210,21 @@ function ChatWindow({ thread, minimized, rightPosition = 20, onClose, onMinimize
 
   // Full chat window
   return (
-    <div className="chat-window" style={{ right: `${rightPosition}px` }}>
+    <div className={`chat-window ${isMobileFullPage ? 'mobile-full-page' : ''}`} style={isMobileFullPage ? {} : { right: `${rightPosition}px` }}>
       <div className="chat-header">
         <div className="chat-header-info">
+          {isMobileFullPage && (
+            <button className="icon-btn back-btn" onClick={onClose} title="Back">
+              <FiCornerUpLeft size={20} />
+            </button>
+          )}
           <div className="avatar-sm">{initial}</div>
           <div className="chat-header-text">
             <h4>{title}</h4>
             <span className="chat-status">{isGroup ? "Group chat" : "Direct message"}</span>
           </div>
         </div>
+        {!isMobileFullPage && (
         <div className="chat-header-actions">
           <button className="icon-btn" onClick={onMinimize} title="Minimize">
             <FiMinus size={16} />
@@ -227,6 +233,7 @@ function ChatWindow({ thread, minimized, rightPosition = 20, onClose, onMinimize
             <FiX size={16} />
           </button>
         </div>
+        )}
       </div>
 
       <div className="chat-messages" ref={listRef}>

@@ -104,6 +104,22 @@ public class GroupServiceImpl implements GroupService {
                 }
             });
         }
+        // Send GROUP_CREATED event to the creator for multi-device sync
+        userDao.findById(groupDTO.getCreatorId()).ifPresent(creator -> {
+            if (creator.getEmail() != null) {
+                GroupEventData creatorPayload = new GroupEventData();
+                creatorPayload.setType("GROUP_CREATED");
+                creatorPayload.setGroupId(savedGroup.getId());
+                creatorPayload.setGroupName(savedGroup.getGroupName());
+                creatorPayload.setCreatorId(groupDTO.getCreatorId());
+                creatorPayload.setCreatorName(groupDTO.getCreatorName());
+                
+                socketIOServer.getRoomOperations(creator.getEmail())
+                        .sendEvent("groupInvite", creatorPayload);
+                logger.info("[GroupService] Socket.IO event [GROUP_CREATED] sent to creator room for multi-device sync: {}", creator.getEmail());
+            }
+        });
+        
         logger.info("Group creation completed for group id: {}", savedGroup.getId());
         
         // Update the return DTO with the saved id

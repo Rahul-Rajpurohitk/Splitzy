@@ -20,9 +20,13 @@ function ChatDropdown({ onSelectThread }) {
   useEffect(() => {
     if (lastEvent?.eventType === "CHAT_NOTIFICATION") {
       console.log("[ChatDropdown] Chat notification received:", lastEvent.payload);
+      // Don't increment unread count for messages sent by the current user
+      // (supports multi-device sync without showing self-notifications)
+      if (lastEvent.payload?.senderId !== myUserId) {
       setUnreadCount(prev => prev + 1);
+      }
     }
-  }, [lastEvent]);
+  }, [lastEvent, myUserId]);
   
   // Clear unread when opening the dropdown
   useEffect(() => {
