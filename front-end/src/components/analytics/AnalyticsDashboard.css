@@ -2041,3 +2041,47 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+
+/* ========== FIX: Prevent horizontal scroll when right panel is visible ========== */
+/* Container-width responsive grids for constrained space */
+@media (min-width: 769px) {
+  /* When container is narrow (right panel visible), use flexible grids */
+  .analytics-content {
+    overflow-x: hidden;
+  }
+
+  .analytics-dashboard {
+    min-width: 0;
+  }
+
+  /* Make hero KPI grid responsive to container, not just viewport */
+  .hero-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  }
+
+  /* Make top charts responsive */
+  .analytics-top-charts {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  /* Make secondary grid responsive */
+  .analytics-secondary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
+/* ========== FIX: KPI text overflow ========== */
+.hero-kpi {
+  overflow: hidden;
+}
+
+.hero-kpi-content {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.hero-kpi-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

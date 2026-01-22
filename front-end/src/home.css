@@ -5351,12 +5351,24 @@ html {
   .main-grid {
     grid-template-columns: 200px 1fr 180px;
   }
-  
+
   .topbar {
     padding: 4px 12px;
   }
-  
+
   .hero-kpi-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* ========== FIX: Ensure right panel is completely hidden when collapsed ========== */
+.panel.sidebar.panel-collapsed {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
