@@ -2070,20 +2070,22 @@
   }
 }
 
-/* ========== FIX: KPI text overflow ========== */
+/* ========== FIX: KPI cards - ensure values always visible ========== */
 .hero-kpi {
-  overflow: hidden;
-}
-
-.hero-kpi-content {
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
 }
 
+.hero-kpi-content {
+  overflow: visible;
+  min-width: 0;
+}
+
+/* KPI values should NEVER truncate - use font scaling instead */
 .hero-kpi-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(0.9rem, 2vw, 1.4rem) !important;
   white-space: nowrap;
+  overflow: visible !important;
 }
 
 /* ========== FIX: Chart panel and section header overflow ========== */
@@ -2142,21 +2144,19 @@
   text-overflow: ellipsis;
 }
 
-/* ========== FIX: Better KPI value scaling when space is constrained ========== */
+/* ========== FIX: Better KPI scaling when space is constrained ========== */
 @media (min-width: 769px) {
   .hero-kpi {
     min-width: 0;
     flex: 1;
   }
 
-  .hero-kpi-value {
-    font-size: clamp(1rem, 2.5vw, 1.5rem);
-  }
-
+  /* Labels can truncate, but values must NEVER truncate */
   .hero-kpi-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.6rem;
   }
 }
 
