@@ -2159,3 +2159,62 @@
     white-space: nowrap;
   }
 }
+
+/* ========== FIX: Personal vs Shared card - prevent amount overflow ========== */
+.type-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  overflow: hidden !important;
+  min-width: 0 !important;
+  flex-wrap: nowrap !important;
+}
+
+.type-name {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.type-amount {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.type-badge {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
+
+/* ========== FIX: Top Expenses list - better text truncation ========== */
+.top-expense-item {
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.expense-info {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.expense-name {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+
+.expense-amount {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  margin-left: auto !important;
+  padding-left: 8px !important;
+}
