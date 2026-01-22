@@ -2160,34 +2160,52 @@
   }
 }
 
-/* ========== FIX: Personal vs Shared card - ensure text visibility ========== */
+/* ========== FIX: Personal vs Shared card - responsive layout ========== */
+.expense-type-compact {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  justify-content: center !important;
+}
+
+.type-donut-mini {
+  width: 80px !important;
+  height: 80px !important;
+  flex-shrink: 0 !important;
+}
+
+.type-legend-compact {
+  flex: 1 1 120px !important;
+  min-width: 100px !important;
+}
+
 .type-row {
   display: flex !important;
   align-items: center !important;
   gap: 4px !important;
   overflow: hidden !important;
   flex-wrap: nowrap !important;
+  padding: 6px 8px !important;
 }
 
 .type-name {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-  min-width: 70px !important;
-  flex: 1 1 70px !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  font-size: 0.7rem !important;
 }
 
 .type-amount {
   flex: 0 0 auto !important;
   white-space: nowrap !important;
-  font-size: 0.7rem !important;
+  font-size: 0.65rem !important;
 }
 
+/* Hide badge when space is tight - badge adds clutter in narrow views */
 .type-badge {
-  flex: 0 0 auto !important;
-  white-space: nowrap !important;
-  font-size: 0.6rem !important;
-  padding: 1px 4px !important;
+  display: none !important;
 }
 
 /* ========== FIX: Top Expenses list - ensure name visibility ========== */
@@ -2199,7 +2217,7 @@
 
 .expense-info {
   flex: 1 1 auto !important;
-  min-width: 80px !important;
+  min-width: 60px !important;
   overflow: hidden !important;
 }
 
