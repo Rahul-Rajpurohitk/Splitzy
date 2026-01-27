@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { 
+import {
   FiTrendingUp, FiTrendingDown, FiPieChart, FiCalendar,
   FiRefreshCw, FiArrowUp, FiArrowDown, FiAlertCircle,
   FiZap, FiDollarSign, FiUsers, FiTarget, FiAward,
@@ -240,51 +240,60 @@ function AnalyticsDashboard() {
     return { startDate: start.toISOString().split('T')[0], endDate: end.toISOString().split('T')[0] };
   }, [dateRange]);
   
-  const fetchAnalytics = useCallback(async (forceRefresh = false) => {
-    setLoading(true);
+  // Track if initial load is complete to enable background refreshes
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
+
+  const fetchAnalytics = useCallback(async (forceRefresh = false, backgroundRefresh = false) => {
+    // For background refresh, don't show loading spinner - just update data silently
+    if (backgroundRefresh && initialLoadComplete) {
+      setIsBackgroundRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
-    
+
     const { startDate, endDate } = getDateRange();
-    
+
     // Invalidate cache if force refresh
     if (forceRefresh) {
       invalidateCache('/analytics');
     }
-    
+
     try {
       // Use cached API calls for better performance
-      const fetchFn = forceRefresh ? api.get.bind(api) : 
+      const fetchFn = forceRefresh ? api.get.bind(api) :
         (url) => cachedGet(url, {}, ANALYTICS_CACHE_TTL);
-      
+
       const [summaryRes, trendsRes, balancesRes] = await Promise.allSettled([
         fetchFn(`/analytics/summary?startDate=${startDate}&endDate=${endDate}`),
         fetchFn(`/analytics/trends?startDate=${startDate}&endDate=${endDate}&granularity=${granularity}&includeComparison=true`),
         fetchFn(`/analytics/balances`)
       ]);
-      
+
       // Handle partial failures gracefully
       if (summaryRes.status === 'fulfilled') {
         setSummary(summaryRes.value.data);
       } else {
         console.warn('Summary fetch failed:', summaryRes.reason?.message);
       }
-      
+
       if (trendsRes.status === 'fulfilled') {
         setTrends(trendsRes.value.data);
       } else {
         console.warn('Trends fetch failed:', trendsRes.reason?.message);
       }
-      
+
       if (balancesRes.status === 'fulfilled') {
         setBalances(balancesRes.value.data);
       } else {
         console.warn('Balances fetch failed:', balancesRes.reason?.message);
       }
-      
-      // Only show error if ALL requests failed
+
+      // Only show error if ALL requests failed AND it's not a background refresh
       const allFailed = [summaryRes, trendsRes, balancesRes].every(r => r.status === 'rejected');
-      if (allFailed) {
-        const errorMsg = summaryRes.reason?.response?.status === 429 
+      if (allFailed && !backgroundRefresh) {
+        const errorMsg = summaryRes.reason?.response?.status === 429
           ? 'Too many requests. Please wait a moment and try again.'
           : 'Failed to load analytics data. Please try again.';
         setError(errorMsg);
@@ -292,23 +301,64 @@ function AnalyticsDashboard() {
       } else {
         setRetryCount(0);
       }
-      
+
+      // Mark initial load as complete
+      if (!initialLoadComplete) {
+        setInitialLoadComplete(true);
+      }
+
     } catch (err) {
       console.error('Analytics fetch error:', err);
-      const errorMsg = err.response?.status === 429 
-        ? 'Rate limit exceeded. Please wait and try again.'
-        : err.response?.status === 401
-        ? 'Session expired. Please log in again.'
-        : 'Failed to load analytics data';
-      setError(errorMsg);
-      setRetryCount(prev => prev + 1);
+      // Don't show errors for background refreshes
+      if (!backgroundRefresh) {
+        const errorMsg = err.response?.status === 429
+          ? 'Rate limit exceeded. Please wait and try again.'
+          : err.response?.status === 401
+          ? 'Session expired. Please log in again.'
+          : 'Failed to load analytics data';
+        setError(errorMsg);
+        setRetryCount(prev => prev + 1);
+      }
     } finally {
       setLoading(false);
+      setIsBackgroundRefreshing(false);
     }
-  }, [token, getDateRange, granularity]);
+  }, [token, getDateRange, granularity, initialLoadComplete]);
   
-  useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
-  
+  // Initial fetch - show loading spinner
+  useEffect(() => {
+    if (!initialLoadComplete) {
+      fetchAnalytics();
+    }
+  }, []); // Only run once on mount
+
+  // When dateRange or granularity changes, do a background refresh (no loading spinner)
+  useEffect(() => {
+    if (initialLoadComplete) {
+      console.log('[Analytics] Filter changed - background refreshing');
+      invalidateCache('/analytics');
+      fetchAnalytics(true, true);
+    }
+  }, [dateRange, granularity]); // Only trigger when these specific filters change
+
+  // Listen for real-time expense events via Redux socket state and refresh analytics in background
+  const lastSocketEvent = useSelector((state) => state.socket.lastEvent);
+
+  useEffect(() => {
+    if (!lastSocketEvent) return;
+
+    // Handle expense events that should trigger analytics refresh - do it in background
+    if (lastSocketEvent.eventType === 'EXPENSE_EVENT') {
+      const eventType = lastSocketEvent.payload?.type;
+      if (['EXPENSE_CREATED', 'EXPENSE_UPDATED', 'EXPENSE_DELETED', 'EXPENSE_SETTLED'].includes(eventType)) {
+        console.log('[Analytics] Expense event received:', eventType, '- background refreshing analytics');
+        invalidateCache('/analytics');
+        // Use background refresh to avoid disrupting user interaction
+        fetchAnalytics(true, true);
+      }
+    }
+  }, [lastSocketEvent, fetchAnalytics]);
+
   useEffect(() => {
     switch (dateRange) {
       case 'week': setGranularity('DAILY'); break;
@@ -714,8 +764,13 @@ function AnalyticsDashboard() {
             {hasActiveFilters && <span className="filter-badge"></span>}
           </button>
           
-          <button className="icon-btn" onClick={fetchAnalytics} title="Refresh">
-            <FiRefreshCw size={14} />
+          <button
+            className={`icon-btn ${isBackgroundRefreshing ? 'refreshing' : ''}`}
+            onClick={() => fetchAnalytics(true, true)}
+            title={isBackgroundRefreshing ? "Refreshing..." : "Refresh"}
+            disabled={isBackgroundRefreshing}
+          >
+            <FiRefreshCw size={14} className={isBackgroundRefreshing ? 'spin' : ''} />
           </button>
         </div>
       </div>

@@ -129,8 +129,8 @@ function Notification() {
         }
         break;
       case 'EXPENSE_EVENT':
-        if (lastEvent.payload.type === 'EXPENSE_CREATED') {
-          console.log('[Notification] re-fetching notifications for EXPENSE_CREATED event');
+        if (lastEvent.payload.type === 'EXPENSE_CREATED' || lastEvent.payload.type === 'EXPENSE_SETTLED') {
+          console.log('[Notification] re-fetching notifications for', lastEvent.payload.type, 'event');
           fetchNotifications();
         }
         break;

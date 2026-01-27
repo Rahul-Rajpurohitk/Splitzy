@@ -1,10 +1,10 @@
 /* eslint-env serviceworker */
 /* eslint-disable no-restricted-globals */
-// Splitzy Service Worker v1.0.1
+// Splitzy Service Worker v1.0.4
 // Bump cache version when deploying to ensure old cached bundles are cleared.
-const CACHE_NAME = 'splitzy-cache-v2';
-const STATIC_CACHE = 'splitzy-static-v2';
-const DYNAMIC_CACHE = 'splitzy-dynamic-v2';
+const CACHE_NAME = 'splitzy-cache-v5';
+const STATIC_CACHE = 'splitzy-static-v5';
+const DYNAMIC_CACHE = 'splitzy-dynamic-v5';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -16,8 +16,8 @@ const STATIC_ASSETS = [
   '/favicon.ico'
 ];
 
-// API paths that should use network-first strategy
-const API_PATHS = ['/api/', '/socket.io/'];
+// API paths that should use network-first strategy (NEVER cache stale)
+const API_PATHS = ['/api/', '/socket.io/', '/home/', '/auth/', '/groups/', '/friends/', '/notifications/', '/analytics/', '/chat/'];
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -85,8 +85,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - Network first, fall back to cache
-  if (API_PATHS.some(path => url.pathname.startsWith(path))) {
+  // API requests - Network only (no caching to prevent stale data issues)
+  // Check both pathname and hostname for API subdomain
+  const isApiRequest = API_PATHS.some(path => url.pathname.startsWith(path)) ||
+                       url.hostname.startsWith('api.');
+  if (isApiRequest) {
     event.respondWith(networkFirst(request));
     return;
   }
@@ -134,22 +137,15 @@ async function cacheFirst(request) {
   }
 }
 
-// Network First Strategy - For API calls
+// Network First Strategy - For API calls (NO caching to prevent stale data)
 async function networkFirst(request) {
   try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
+    // Always fetch from network for API calls - don't cache API responses
+    const networkResponse = await fetch(request, { cache: 'no-store' });
     return networkResponse;
   } catch (error) {
-    console.log('[SW] Network failed, trying cache:', request.url);
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    // Return error response for API calls
+    console.log('[SW] Network failed for API call:', request.url);
+    // Return error response for API calls - don't serve stale cached data
     return new Response(
       JSON.stringify({ error: 'You are offline', offline: true }),
       {
@@ -180,12 +176,19 @@ async function networkFirstNoCache(request) {
 // Stale While Revalidate Strategy - For other resources
 async function staleWhileRevalidate(request) {
   const cachedResponse = await caches.match(request);
-  
+
+  // Start fetch in background
   const fetchPromise = fetch(request)
-    .then((networkResponse) => {
+    .then(async (networkResponse) => {
       if (networkResponse.ok) {
-        const cache = caches.open(DYNAMIC_CACHE);
-        cache.then(c => c.put(request, networkResponse.clone()));
+        try {
+          // Clone IMMEDIATELY before any other operation
+          const responseToCache = networkResponse.clone();
+          const cache = await caches.open(DYNAMIC_CACHE);
+          await cache.put(request, responseToCache);
+        } catch (cacheError) {
+          console.log('[SW] Cache put failed:', cacheError);
+        }
       }
       return networkResponse;
     })
@@ -194,6 +197,7 @@ async function staleWhileRevalidate(request) {
       return cachedResponse;
     });
 
+  // Return cached response immediately if available, otherwise wait for network
   return cachedResponse || fetchPromise;
 }
 

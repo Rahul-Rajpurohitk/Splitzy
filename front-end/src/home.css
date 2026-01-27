@@ -1259,15 +1259,21 @@ html {
   min-height: auto;
 }
 
-/* Friend and Group row styles with messaging */
+/* Friend and Group row styles - clean clickable design */
 .friend-row,
 .group-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 10px;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.friend-row.clickable,
+.group-row.clickable {
+  cursor: pointer;
 }
 
 .friend-row:hover,
@@ -1275,54 +1281,51 @@ html {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.friend-actions,
-.group-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.friend-row .row-name,
+.group-row .row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Group type tag */
+.group-row .row-tag {
   margin-left: auto;
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
 }
 
-.friend-chat-btn,
-.group-chat-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(56, 189, 248, 0.1);
-  color: var(--accent-2);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.friend-chat-btn:hover,
-.group-chat-btn:hover {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: var(--accent-2);
-  transform: scale(1.05);
-}
-
+/* Unfriend button - hidden by default, shown on hover */
 .unfriend-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   border: none;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
-  opacity: 0.7;
+  opacity: 0;
   transition: all 0.15s ease;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.friend-row:hover .unfriend-btn {
+  opacity: 0.5;
 }
 
 .unfriend-btn:hover {
-  opacity: 1;
-  background: rgba(239, 68, 68, 0.2);
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
 }
 
 /* Base modal overlay - covers entire screen */
@@ -1675,6 +1678,70 @@ html {
   border-radius: 12px;
   padding: 10px;
 }
+
+/* Validation header for split options */
+.validation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.validation-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.validation-indicator.valid {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.validation-indicator.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.validation-indicator.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+/* Input with action button */
+.input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auto-fill-btn {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.auto-fill-btn:hover {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: #22c55e;
+}
+
+/* Error state for inputs */
+.input-error {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
 .inline-pair {
   display: flex;
   align-items: center;
@@ -1827,19 +1894,20 @@ html {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   position: sticky;
-  top: 0; /* Stick to top of scrollable container */
-  background: linear-gradient(180deg, 
-    rgba(15, 23, 42, 0.98) 0%, 
-    rgba(15, 23, 42, 0.95) 80%, 
-    rgba(15, 23, 42, 0) 100%);
-  backdrop-filter: blur(12px);
-  padding: 16px 16px 24px 16px;
+  top: 0;
+  background: #0f172a; /* Solid background - no transparency */
+  padding: 16px;
   margin: -16px -16px 0 -16px;
   z-index: 100;
-  border-radius: var(--radius) var(--radius) 0 0;
-  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
+
+.expense-header-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 -16px 12px -16px;
+  opacity: 0.6;
 }
 .expense-head-left {
   display: flex;
@@ -2439,6 +2507,29 @@ html {
 }
 .breakdown-net.negative {
   color: #ef4444;
+}
+.breakdown-net.neutral {
+  color: var(--muted);
+}
+
+/* Settled row styling */
+.breakdown-row.settled {
+  opacity: 0.7;
+}
+.settled-badge-small {
+  margin-left: 4px;
+  color: #22c55e;
+  font-size: 0.75rem;
+}
+.settled-text {
+  color: #22c55e;
+  font-size: 0.85rem;
+}
+.partial-indicator {
+  color: #fbbf24;
+  font-size: 0.9rem;
+  margin-left: 2px;
+  cursor: help;
 }
 
 /* Notes */
@@ -3799,19 +3890,21 @@ html {
 }
 
 /* Settlement Modal */
-.settle-modal {
+.settle-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10001;
   animation: fadeIn 0.2s ease;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .settle-modal-content {
@@ -3819,8 +3912,10 @@ html {
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 20px;
   padding: 24px;
-  width: 90%;
-  max-width: 400px;
+  width: 100%;
+  max-width: 450px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
   isolation: isolate; /* Prevents backdrop-filter bleed through */
 }
@@ -3955,6 +4050,190 @@ html {
 .settle-confirm-btn:hover {
   background: linear-gradient(135deg, #16a34a, #15803d);
   box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
+}
+
+.settle-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Payer Settlement UI - For recording payments received */
+.settle-payer-summary {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.settle-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.settle-summary-row.highlight {
+  font-weight: 700;
+}
+
+.settle-summary-row .positive {
+  color: #22c55e;
+}
+
+.settle-summary-note {
+  margin-top: 8px;
+  color: rgba(255,255,255,0.5);
+}
+
+.settle-summary-note small {
+  font-size: 0.75rem;
+}
+
+/* Participants list for payer mode */
+.settle-participants-list {
+  margin-bottom: 16px;
+}
+
+.settle-list-header {
+  display: grid;
+  grid-template-columns: 1fr 100px 90px;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.settle-participant-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 90px;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.settle-participant-row:last-child {
+  margin-bottom: 0;
+}
+
+.participant-name {
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.participant-owes {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.8);
+}
+
+.participant-owes .already-settled {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(34, 197, 94, 0.8);
+  margin-top: 2px;
+}
+
+.participant-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.participant-input-wrapper:focus-within {
+  border-color: #22c55e;
+}
+
+.currency-prefix {
+  padding: 0 8px;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.85rem;
+}
+
+.participant-input-wrapper input {
+  flex: 1;
+  padding: 8px 8px 8px 0;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 0.9rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.participant-input-wrapper input:focus {
+  outline: none;
+}
+
+.participant-input-wrapper input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+/* Quick action buttons for payer mode */
+.settle-quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.quick-action-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: none;
+  color: #fff;
+}
+
+.quick-action-btn:hover {
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.quick-action-btn.secondary {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.8);
+}
+
+.quick-action-btn.secondary:hover {
+  background: rgba(255,255,255,0.06);
+  box-shadow: none;
+}
+
+/* Total being settled row */
+.settle-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.settle-total-row .positive {
+  color: #22c55e;
+}
+
+/* Highlight row for amounts */
+.settle-amount-row.highlight {
+  font-weight: 700;
+  color: #fff;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 /* Personal expense indicator */
@@ -4565,9 +4844,14 @@ html {
   
   /* Expense list adjustments */
   .expense-header {
-    padding: 8px 8px 16px;
-    margin: -16px -16px 0;
+    padding: 8px;
+    margin: -8px -8px 0;
     font-size: 0.85rem;
+    background: #0f172a;
+  }
+
+  .expense-header-divider {
+    margin: 0 -8px 8px -8px;
   }
   
   /* Hide Add expense button on mobile - use bottom nav instead */
@@ -4993,7 +5277,12 @@ html {
   .panel.sidebar.mobile-open .group-row:active {
     background: #1a2744 !important;
   }
-  
+
+  /* Show unfriend button on mobile (no hover on touch) */
+  .panel.sidebar.mobile-open .unfriend-btn {
+    opacity: 0.4;
+  }
+
   /* Sidebar header */
   .panel.sidebar.mobile-open .sidebar-header {
     background: #080c18 !important;
@@ -5246,14 +5535,48 @@ html {
   }
   
   /* Settle modal on mobile */
+  .settle-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
   .settle-modal-content {
     width: 100%;
     max-width: 100%;
+    max-height: 85vh;
     border-radius: 16px 16px 0 0;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    position: relative;
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  /* Responsive grid for participant list on mobile */
+  .settle-list-header,
+  .settle-participant-row {
+    grid-template-columns: 1fr 80px 80px;
+    gap: 4px;
+    padding: 10px;
+  }
+
+  .participant-name {
+    font-size: 0.85rem;
+  }
+
+  .participant-owes {
+    font-size: 0.8rem;
+  }
+
+  .participant-input-wrapper input {
+    font-size: 0.85rem;
+    padding: 6px 6px 6px 0;
+  }
+
+  .settle-quick-actions {
+    flex-direction: column;
   }
   
   /* Chat window on mobile */

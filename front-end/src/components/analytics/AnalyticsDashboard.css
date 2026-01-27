@@ -205,6 +205,16 @@
   border: 2px solid #0b132b;
 }
 
+/* Spinning refresh icon for background refresh */
+.icon-btn.refreshing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.icon-btn svg.spin {
+  animation: spin 0.8s linear infinite;
+}
+
 /* ========== INLINE FILTERS ========== */
 .inline-filters {
   background: rgba(255,255,255,0.02);

@@ -1,18 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import axios from 'axios';
-import { FiMessageCircle, FiX } from 'react-icons/fi';
-import { setExpenseFilter } from '../features/expense/expenseSlice'; // New action
+import { FiX } from 'react-icons/fi';
 
-function Friends({ 
-  onOpenChat, 
-  isMobile = false,
+function Friends({
+  onOpenChat,
   externalTriggerAdd = false,
   onAddModalClosed,
   hideHeader = false
 }) {
-  const dispatch = useDispatch();
   const [friends, setFriends] = useState([]);  // array of friend objects { id, name, ... }
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -182,14 +179,11 @@ function Friends({
   // Show all friends (scrollable list)
   const topFriends = friends;
 
-  // Friend click handler - different behavior for mobile vs desktop
+  // Friend click handler - open chat on click
   const handleFriendClick = async (friend) => {
-    if (isMobile && onOpenChat) {
-      // On mobile, clicking the row opens chat
+    if (onOpenChat) {
+      // Clicking a friend opens chat
       await handleOpenFriendChat(friend);
-    } else {
-      // On desktop, clicking the row filters expenses
-      dispatch(setExpenseFilter({ filterType: "friend", filterEntity: friend }));
     }
   };
 
@@ -219,35 +213,25 @@ function Friends({
       <ul className="list-stack compact">
         {topFriends.length > 0 ? (
           topFriends.map((friend) => (
-            <li 
-              key={friend.id} 
-              className={`list-row friend-row ${isMobile ? 'mobile-clickable' : ''}`} 
+            <li
+              key={friend.id}
+              className="list-row friend-row clickable"
               onClick={() => handleFriendClick(friend)}
+              title="Click to open chat"
             >
               <div className="avatar-sm">{friend.name?.[0] || "F"}</div>
               <span className="row-name">{friend.name}</span>
-              <div className="friend-actions">
-                {/* Only show chat button on desktop */}
-                {!isMobile && onOpenChat && (
-                  <button
-                    className="friend-chat-btn desktop-only"
-                    onClick={(e) => handleOpenFriendChat(friend, e)}
-                    title="Send message"
-                  >
-                    <FiMessageCircle size={16} />
-                  </button>
-                )}
-                <button
-                  className="row-action unfriend-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOpenUnfriendModal(friend);
-                  }}
-                  title="Remove friend"
-                >
-                  <FiX size={14} />
-                </button>
-              </div>
+              {/* Unfriend button - shows on hover */}
+              <button
+                className="row-action unfriend-btn hover-show"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenUnfriendModal(friend);
+                }}
+                title="Remove friend"
+              >
+                <FiX size={14} />
+              </button>
             </li>
           ))
         ) : (

@@ -69,12 +69,13 @@ body {
   position: fixed;
   inset: 0;
   background-image:
-    url("https://assets.21st.dev/patterns/contours.svg"),
+    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
     linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0));
-  background-size: 1400px 1400px, cover;
-  background-repeat: repeat, no-repeat;
+  background-size: 60px 60px, 40px 40px, cover;
+  background-repeat: repeat, repeat, no-repeat;
   background-position: center;
-  opacity: 0.18;
+  opacity: 0.4;
   pointer-events: none;
   z-index: -1;
 }

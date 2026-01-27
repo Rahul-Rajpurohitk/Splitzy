@@ -29,6 +29,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable) // Updated API for disabling CSRF
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login", "/auth/signup", "/auth/verify-email", "/auth/test-signup", "/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers("/api/health", "/api/ping", "/actuator/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )

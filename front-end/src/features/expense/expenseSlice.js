@@ -95,6 +95,40 @@ export const fetchExpensesForGroupThunk = createAsyncThunk(
   }
 );
 
+// 6) Background sync thunk - silently updates without triggering loading state
+// Only updates Redux state if data actually changed (compares by JSON stringification)
+export const backgroundSyncExpensesThunk = createAsyncThunk(
+  "expense/backgroundSync",
+  async ({ userId, token }, thunkAPI) => {
+    try {
+      if (!userId) throw new Error("No userId provided");
+      const res = await axios.get(
+        `${process.env.REACT_APP_API_URL}/home/expenses/user-expenses`,
+        {
+          params: { userId, filter: "ALL" },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      // Get current state to compare
+      const currentList = thunkAPI.getState().expense.list;
+      const newData = res.data;
+
+      // Quick comparison by length and stringified content
+      const hasChanges = currentList.length !== newData.length ||
+        JSON.stringify(currentList.map(e => ({ id: e.id, updatedAt: e.updatedAt }))) !==
+        JSON.stringify(newData.map(e => ({ id: e.id, updatedAt: e.updatedAt })));
+
+      // Return data with flag indicating if update is needed
+      return { data: newData, hasChanges };
+    } catch (err) {
+      // Silently fail for background sync - don't disrupt user
+      console.warn('[BackgroundSync] Failed:', err.message);
+      return thunkAPI.rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
 
 // 4) Initial state
 const initialState = {
@@ -200,6 +234,23 @@ const expenseSlice = createSlice({
         state.error = action.payload || "Failed to fetch group expenses";
       });
 
+    // Background sync - only updates if data changed, no loading state
+    builder
+      .addCase(backgroundSyncExpensesThunk.pending, (state) => {
+        // Do NOT set loading state - this is a silent background sync
+      })
+      .addCase(backgroundSyncExpensesThunk.fulfilled, (state, action) => {
+        // Only update list if data actually changed
+        if (action.payload?.hasChanges) {
+          console.log('[BackgroundSync] Data changed, updating state silently');
+          state.list = action.payload.data;
+          // Keep status as-is (don't change to "succeeded" to avoid re-renders)
+        }
+      })
+      .addCase(backgroundSyncExpensesThunk.rejected, (state, action) => {
+        // Silently ignore errors for background sync
+        console.warn('[BackgroundSync] Silently ignoring error:', action.payload);
+      });
 
   },
 });

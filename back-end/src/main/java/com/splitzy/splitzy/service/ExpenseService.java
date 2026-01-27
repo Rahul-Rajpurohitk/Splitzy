@@ -664,8 +664,52 @@ public class ExpenseService {
         
         expense.setUpdatedAt(LocalDateTime.now());
         ExpenseDto savedDto = expenseDao.save(expense);
-        
-        return toExpense(savedDto);
+
+        Expense saved = toExpense(savedDto);
+
+        // Send socket event for expense settlement
+        sendExpenseSettledEvent(saved, request.getParticipantUserId());
+
+        return saved;
+    }
+
+    /**
+     * Send socket event when expense is settled.
+     */
+    private void sendExpenseSettledEvent(Expense expense, String settledByUserId) {
+        try {
+            ExpenseEventData data = new ExpenseEventData();
+            data.setType("EXPENSE_SETTLED");
+            data.setExpenseId(expense.getId());
+            data.setCreatorId(settledByUserId);
+
+            UserDto settledByUser = userDao.findById(settledByUserId).orElse(null);
+            if (settledByUser != null) {
+                data.setCreatorName(settledByUser.getName());
+            }
+
+            Set<String> targetEmails = new HashSet<>();
+
+            // Notify all participants
+            for (Participant p : expense.getParticipants()) {
+                UserDto user = userDao.findById(p.getUserId()).orElse(null);
+                if (user != null) {
+                    String email = user.getEmail();
+                    if (!targetEmails.contains(email)) {
+                        targetEmails.add(email);
+                        socketIOServer.getRoomOperations(email)
+                                .sendEvent("expenseEvent", data);
+                        logger.info("[ExpenseService] Socket.IO event [EXPENSE_SETTLED] sent to room: {}", email);
+                    }
+                }
+            }
+
+            // Also publish to SQS for guaranteed delivery
+            sqsEventPublisher.publishExpenseEvent(targetEmails, data);
+
+        } catch (Exception e) {
+            logger.error("[ExpenseService] Error sending expense settled event: {}", e.getMessage(), e);
+        }
     }
 
     /**

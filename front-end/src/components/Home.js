@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
-import { fetchExpensesThunk } from '../features/expense/expenseSlice';
+import { fetchExpensesThunk, backgroundSyncExpensesThunk } from '../features/expense/expenseSlice';
 import Friends from './Friends';
 import Notification from './Notification';
 import SplitzySocket from './SplitzySocket';
@@ -154,22 +154,25 @@ function Home() {
   
   useEffect(() => {
     if (!lastEvent) return;
-    // Re-fetch expenses when a new expense is created (updates recent activity)
-    if (lastEvent.eventType === 'EXPENSE_EVENT' && lastEvent.payload?.type === 'EXPENSE_CREATED') {
-      console.log('[Home] Expense event received, refreshing expenses for recent activity');
+    // Re-fetch expenses when a new expense is created or settled (updates recent activity)
+    if (lastEvent.eventType === 'EXPENSE_EVENT' &&
+        (lastEvent.payload?.type === 'EXPENSE_CREATED' || lastEvent.payload?.type === 'EXPENSE_SETTLED')) {
+      console.log('[Home] Expense event received:', lastEvent.payload?.type, '- refreshing expenses');
       dispatch(fetchExpensesThunk({ userId: myUserId, token }));
     }
   }, [lastEvent, dispatch, myUserId, token]);
   
-  // RELIABILITY: Periodic sync every 30 seconds to catch missed socket events
+  // RELIABILITY: Background sync every 30 seconds to catch missed socket events
+  // Uses backgroundSyncExpensesThunk which only updates if data actually changed
+  // This prevents unnecessary re-renders and DOM disruptions
   useEffect(() => {
     if (!myUserId || !token) return;
-    
+
     const syncInterval = setInterval(() => {
-      console.log('[Home] Periodic sync - fetching latest data');
-      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+      console.log('[Home] Background sync - checking for updates');
+      dispatch(backgroundSyncExpensesThunk({ userId: myUserId, token }));
     }, 30000); // 30 seconds
-    
+
     return () => clearInterval(syncInterval);
   }, [myUserId, token, dispatch]);
 
@@ -233,6 +236,7 @@ function Home() {
   const expenses = useSelector((state) => state.expense.list);
 
   // Calculate user's overall balance - split by shared and personal
+  // IMPORTANT: Account for settled amounts to show effective balance
   const balanceData = useMemo(() => {
     let sharedOwed = 0;
     let sharedOwing = 0;
@@ -244,23 +248,33 @@ function Home() {
       if (myParticipant) {
         const net = myParticipant.net || 0;
         const share = myParticipant.share || 0;
-        
+        const settledAmount = myParticipant.settledAmount || 0;
+        const isFullySettled = myParticipant.fullySettled || false;
+
         if (expense.isPersonal) {
           // Personal expenses - just track total spent
           personalTotal += share;
         } else {
-          // Shared expenses - track owed/owing
-          if (net > 0) {
+          // Shared expenses - track owed/owing with settlement adjustments
+          // If fully settled, this expense contributes 0 to balance
+          if (isFullySettled || expense.isSettled) {
+            // Fully settled - no outstanding balance
+          } else if (net > 0) {
+            // I'm owed money - others owe me
+            // Note: settledAmount on MY participant is what I'VE settled, not what others paid me
             sharedOwed += net;
           } else if (net < 0) {
-            sharedOwing += Math.abs(net);
+            // I owe money - calculate effective amount after my settlements
+            const amountIOwe = Math.abs(net);
+            const effectiveOwing = Math.max(0, amountIOwe - settledAmount);
+            sharedOwing += effectiveOwing;
           }
         }
       }
     });
 
     const sharedBalance = sharedOwed - sharedOwing;
-    
+
     return {
       sharedOwed,
       sharedOwing,
@@ -306,7 +320,13 @@ function Home() {
         personalCount++;
         personalTotal += myShare;
       }
-      if (exp.isSettled) settledCount++;
+      // Count as settled if whole expense is settled OR if my part is settled
+      const mySettledAmount = myPart?.settledAmount || 0;
+      const myFullySettled = myPart?.fullySettled || false;
+      const myRemainingAmount = Math.abs((myPart?.share || 0) - mySettledAmount);
+      const isMyPartSettled = myFullySettled || myRemainingAmount < 0.01;
+
+      if (exp.isSettled || isMyPartSettled) settledCount++;
       else pendingCount++;
       
       myTotalShare += myShare;

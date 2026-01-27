@@ -34,40 +34,85 @@ const socket = io(socketUrl, {
 
 // Basic connection logging
 socket.on("connect", () => {
-  console.log("Socket.IO connected, id:", socket.id);
+  console.log("[Socket] Connected successfully, id:", socket.id);
 });
 
 socket.on("disconnect", (reason) => {
-  console.log("Socket.IO disconnected:", reason);
+  console.log("[Socket] Disconnected:", reason);
+
+  // If user logged out or token is gone, disable auto-reconnect
+  const currentToken = localStorage.getItem('splitzyToken');
+  if (!currentToken) {
+    console.log("[Socket] No token found after disconnect, disabling auto-reconnect");
+    socket.io.opts.reconnection = false;
+  }
 });
 
 socket.on("connect_error", (error) => {
-  console.log("Socket.IO connection error:", error.message);
+  console.log("[Socket] Connection error:", error.message);
+
+  // If we get connection errors and there's no token, stop trying
+  const currentToken = localStorage.getItem('splitzyToken');
+  if (!currentToken) {
+    console.log("[Socket] No token found, stopping reconnection attempts");
+    socket.disconnect();
+  }
 });
 
 // Reconnect socket with new token (call after login)
 export const reconnectSocket = () => {
   const token = localStorage.getItem('splitzyToken');
-  console.log('Reconnecting socket with token:', token ? 'present' : 'null');
-  
+
+  if (!token) {
+    console.warn('[Socket] No token found in localStorage, cannot connect');
+    return socket;
+  }
+
+  console.log('[Socket] Reconnecting with token present, length:', token.length);
+
   // Disconnect first if connected
   if (socket.connected) {
+    console.log('[Socket] Disconnecting existing connection...');
     socket.disconnect();
   }
-  
-  // Update auth with new token
+
+  // Close the underlying engine to force a fresh connection
+  if (socket.io && socket.io.engine) {
+    console.log('[Socket] Closing engine for fresh connection...');
+    socket.io.engine.close();
+  }
+
+  // Update auth with new token (Socket.IO v4 style)
   socket.auth = { token };
-  socket.io.opts.query = { token };
-  
-  // Reconnect
-  socket.connect();
-  
+
+  // Update query params at all levels for netty-socketio compatibility
+  if (socket.io) {
+    // Update Manager options
+    socket.io.opts.query = { token };
+    // Re-enable auto-reconnection (might have been disabled on logout)
+    socket.io.opts.reconnection = true;
+    // Also update _opts if it exists (internal backup)
+    if (socket.io._opts) {
+      socket.io._opts.query = { token };
+    }
+  }
+
+  // Reconnect - use a delay to ensure engine cleanup completes
+  setTimeout(() => {
+    console.log('[Socket] Connecting with updated token...');
+    socket.connect();
+  }, 150);
+
   return socket;
 };
 
 // Disconnect socket (call on logout)
 export const disconnectSocket = () => {
-  console.log('Disconnecting socket...');
+  console.log('[Socket] Disconnecting and disabling auto-reconnect...');
+  // Disable auto-reconnect to prevent reconnecting without token
+  if (socket.io) {
+    socket.io.opts.reconnection = false;
+  }
   socket.disconnect();
 };
 

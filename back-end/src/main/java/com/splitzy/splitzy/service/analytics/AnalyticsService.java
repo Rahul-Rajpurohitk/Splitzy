@@ -372,11 +372,11 @@ public class AnalyticsService {
                 }
             }
             
-            // Calculate user's net in this expense
-            double userNet = getUserNet(userId, expense);
-            
+            // Calculate user's EFFECTIVE net in this expense (accounting for settlements)
+            double userNet = getEffectiveUserNet(userId, expense);
+
             // Distribute balance to other participants
-            if (!otherUsers.isEmpty() && userNet != 0) {
+            if (!otherUsers.isEmpty() && Math.abs(userNet) > 0.01) {
                 double perPerson = userNet / otherUsers.size();
                 for (String otherId : otherUsers) {
                     friendBalances.merge(otherId, perPerson, Double::sum);
@@ -848,15 +848,54 @@ public class AnalyticsService {
     private double getUserNet(String userId, ExpenseSql expense) {
         return getUserPaid(userId, expense) - getUserShare(userId, expense);
     }
-    
+
+    /**
+     * Get the EFFECTIVE net for a user in an expense, accounting for settlements.
+     * This returns the actual outstanding balance after subtracting settled amounts.
+     */
+    private double getEffectiveUserNet(String userId, ExpenseSql expense) {
+        // If the whole expense is settled, no balance
+        if (expense.isSettled()) {
+            return 0;
+        }
+
+        double rawNet = getUserNet(userId, expense);
+
+        // Find user's participant record to check their settlement status
+        ParticipantSql myParticipant = expense.getParticipants().stream()
+            .filter(p -> p.getUserId().equals(userId))
+            .findFirst()
+            .orElse(null);
+
+        if (myParticipant != null) {
+            // If user's part is fully settled, their balance is 0
+            if (myParticipant.isFullySettled()) {
+                return 0;
+            }
+
+            // If user owes money (rawNet < 0), reduce by settled amount
+            if (rawNet < 0) {
+                double amountOwed = Math.abs(rawNet);
+                double settledAmount = myParticipant.getSettledAmount();
+                double effectiveOwed = Math.max(0, amountOwed - settledAmount);
+                return -effectiveOwed; // Return as negative (still owes)
+            }
+        }
+
+        // If user is owed money (rawNet > 0), return as-is
+        // (Other participants settling doesn't directly reduce what's owed to this user in this model)
+        return rawNet;
+    }
+
     private DashboardSummary.BalanceSummary calculateBalanceSummary(String userId, List<ExpenseSql> expenses) {
         DashboardSummary.BalanceSummary summary = new DashboardSummary.BalanceSummary();
-        
+
         Map<String, Double> personBalances = new HashMap<>();
-        
+
         for (ExpenseSql expense : expenses) {
-            double userNet = getUserNet(userId, expense);
-            if (userNet == 0) continue;
+            // Use effective net that accounts for settlements
+            double userNet = getEffectiveUserNet(userId, expense);
+            if (Math.abs(userNet) < 0.01) continue; // Skip if effectively settled
             
             Set<String> others = new HashSet<>();
             expense.getParticipants().stream()
@@ -938,11 +977,12 @@ public class AnalyticsService {
     
     private DashboardSummary.SettlementSummary calculateSettlementSummary(String userId, List<ExpenseSql> expenses) {
         DashboardSummary.SettlementSummary summary = new DashboardSummary.SettlementSummary();
-        
+
         Map<String, Double> balances = new HashMap<>();
         for (ExpenseSql expense : expenses) {
-            double userNet = getUserNet(userId, expense);
-            if (userNet == 0) continue;
+            // Use effective net that accounts for settlements
+            double userNet = getEffectiveUserNet(userId, expense);
+            if (Math.abs(userNet) < 0.01) continue;
             
             Set<String> others = new HashSet<>();
             expense.getParticipants().forEach(p -> {
@@ -1079,12 +1119,12 @@ public class AnalyticsService {
     
     private List<DashboardSummary.PendingAction> calculatePendingActions(String userId, List<ExpenseSql> expenses) {
         List<DashboardSummary.PendingAction> actions = new ArrayList<>();
-        
-        // Calculate per-person balances
+
+        // Calculate per-person balances using effective net (accounting for settlements)
         Map<String, Double> personBalances = new HashMap<>();
         for (ExpenseSql expense : expenses) {
-            double userNet = getUserNet(userId, expense);
-            if (userNet == 0) continue;
+            double userNet = getEffectiveUserNet(userId, expense);
+            if (Math.abs(userNet) < 0.01) continue;
             
             Set<String> others = new HashSet<>();
             expense.getParticipants().forEach(p -> {

@@ -56,7 +56,8 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
   const lastEvent = useSelector((state) => state.socket.lastEvent);
   useEffect(() => {
     if (!lastEvent) return;
-    if (lastEvent.payload.type === "EXPENSE_CREATED") {
+    if (lastEvent.payload?.type === "EXPENSE_CREATED" || lastEvent.payload?.type === "EXPENSE_SETTLED") {
+      console.log('[ExpenseCenter] Expense event received:', lastEvent.payload?.type, '- refreshing');
       dispatch(fetchExpensesThunk({ userId: myUserId, token }));
     }
   }, [lastEvent, dispatch, myUserId, token]);
@@ -156,7 +157,7 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
           </button>
         </div>
       </div>
-      <div className="panel-divider soft" />
+      <div className="expense-header-divider" />
 
       {status === "loading" && <p className="muted">Loading expenses...</p>}
       {status === "failed" && <p className="error-text">Error: {error}</p>}

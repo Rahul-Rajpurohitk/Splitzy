@@ -748,18 +748,38 @@ function AddExpenseModal({ onClose, onSave }) {
   
 
   // 2) Decide which message to show
-  // Update the message display section
+  // Get the payer name(s) for clearer messaging
+  const getPayerName = () => {
+    if (payerMode === "you") return "you";
+    if (payerMode === "multiple") return "multiple people";
+    const payer = participants.find(p => p.id === payerMode);
+    return payer ? payer.name : "someone";
+  };
+
+  // Build a clear, non-redundant message
   let userMessage = "";
   const participant = participants.find(p => p.id === myUserId);
-  if (participant) {
-    const paid = participant.paid || 0;
-    const owes = participant.owes || 0;
-    
-    userMessage = `You ${paid > 0 ? `paid $${paid.toFixed(2)},` : ''} 
-                  ${owes > 0 ? `owe $${owes.toFixed(2)},` : ''} 
-                  ${myNet > 0 ? `get back $${myNet.toFixed(2)}` : 
-                    myNet < 0 ? `owe $${Math.abs(myNet).toFixed(2)}` : 
-                    'are settled'}`;
+  if (participant && amount > 0) {
+    const payerName = getPayerName();
+
+    if (Math.abs(myNet) < 0.01) {
+      // Net is zero - settled
+      userMessage = "You are settled";
+    } else if (myNet > 0) {
+      // User is owed money (they paid more than their share)
+      userMessage = `You get back $${myNet.toFixed(2)}`;
+    } else {
+      // User owes money (they paid less than their share)
+      if (payerMode === "you") {
+        // Edge case: User paid but still has negative net (shouldn't happen normally)
+        userMessage = `Your share is $${(participant.owes || 0).toFixed(2)}`;
+      } else if (payerMode === "multiple") {
+        userMessage = `You owe $${Math.abs(myNet).toFixed(2)}`;
+      } else {
+        // Single other payer - show who they owe
+        userMessage = `You owe ${payerName} $${Math.abs(myNet).toFixed(2)}`;
+      }
+    }
   }
 
   const summary = useMemo(() => {
@@ -992,33 +1012,69 @@ function AddExpenseModal({ onClose, onSave }) {
                       <span>Multiple people</span>
                     </label>
 
-                    {payerMode === "multiple" && (
-                      <div className="boxed">
-                        {payers.map((payr) => {
-                          const partObj = participants.find(
-                            (pp) => pp.id === payr.userId
+                    {payerMode === "multiple" && (() => {
+                      const totalPaid = payers.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+                      const isValid = Math.abs(totalPaid - amount) < 0.01;
+                      const remaining = amount - totalPaid;
+
+                      const handleAutoFillPayer = (userId) => {
+                        if (remaining > 0) {
+                          setPayers((prev) =>
+                            prev.map((p) =>
+                              p.userId === userId ? { ...p, paidAmount: (p.paidAmount || 0) + remaining } : p
+                            )
                           );
-                          return (
-                            <div key={payr.userId} className="inline-pair">
-                              <span className="muted small">
-                                {partObj ? partObj.name : payr.userId}
-                              </span>
-                              <input
-                                type="number"
-                                className="input compact"
-                                value={payr.paidAmount}
-                                onChange={(e) =>
-                                  handlePaidAmountChange(
-                                    payr.userId,
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                        }
+                      };
+
+                      return (
+                        <div className="boxed">
+                          <div className="validation-header">
+                            <span className="muted tiny">Who paid how much? (must sum to ${amount.toFixed(2)})</span>
+                            <span className={`validation-indicator ${isValid ? 'valid' : totalPaid > amount ? 'error' : 'warning'}`}>
+                              ${totalPaid.toFixed(2)} {isValid ? '✓' : totalPaid > amount ? '(over!)' : `($${remaining.toFixed(2)} left)`}
+                            </span>
+                          </div>
+                          {payers.map((payr) => {
+                            const partObj = participants.find(
+                              (pp) => pp.id === payr.userId
+                            );
+                            return (
+                              <div key={payr.userId} className="inline-pair">
+                                <span className="muted small">
+                                  {partObj ? partObj.name : payr.userId}
+                                </span>
+                                <div className="input-with-action">
+                                  <input
+                                    type="number"
+                                    className={`input compact ${(payr.paidAmount || 0) > amount ? 'input-error' : ''}`}
+                                    min="0"
+                                    step="0.01"
+                                    value={payr.paidAmount}
+                                    onChange={(e) =>
+                                      handlePaidAmountChange(
+                                        payr.userId,
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                  {remaining > 0.01 && (payr.paidAmount || 0) === 0 && (
+                                    <button
+                                      type="button"
+                                      className="auto-fill-btn"
+                                      onClick={() => handleAutoFillPayer(payr.userId)}
+                                      title={`Fill $${remaining.toFixed(2)}`}
+                                    >
+                                      +${remaining.toFixed(0)}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
 
@@ -1064,55 +1120,126 @@ function AddExpenseModal({ onClose, onSave }) {
                       <p className="muted small">Everyone splits the total equally.</p>
                     )}
 
-                    {splitMethod === "PERCENTAGE" && (
-                      <div className="boxed">
-                        <p className="muted tiny">Assign % (sum to 100)</p>
-                        {participants.map((p, idx) => (
-                          <div key={p.id} className="inline-pair">
-                            <span className="muted small">{p.name || p.id}</span>
-                            <input
-                              type="number"
-                              className="input compact"
-                              placeholder="0"
-                              value={p.percent || ""}
-                              onChange={(e) => {
-                              const newVal = Math.max(0, parseFloat(e.target.value) || 0);
-                                setParticipants((prev) =>
-                                  prev.map((part, i) =>
-                                    i === idx ? { ...part, percent: newVal } : part
-                                  )
-                                );
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {splitMethod === "PERCENTAGE" && (() => {
+                      const totalPct = participants.reduce((sum, p) => sum + (p.percent || 0), 0);
+                      const isValid = Math.abs(totalPct - 100) < 0.01;
+                      const remaining = 100 - totalPct;
 
-                    {splitMethod === "EXACT_AMOUNTS" && (
-                      <div className="boxed">
-                        <p className="muted tiny">Enter exact amounts (must sum to total)</p>
-                        {participants.map((p, idx) => (
-                          <div key={p.id} className="inline-pair">
-                            <span className="muted small">{p.name || p.id}</span>
-                            <input
-                              type="number"
-                              className="input compact"
-                              placeholder="0"
-                              value={p.exact || ""}
-                              onChange={(e) => {
-                              const newVal = Math.max(0, parseFloat(e.target.value) || 0);
-                                setParticipants((prev) =>
-                                  prev.map((part, i) =>
-                                    i === idx ? { ...part, exact: newVal } : part
-                                  )
-                                );
-                              }}
-                            />
+                      // Auto-fill handler for last empty participant
+                      const handleAutoFill = (idx) => {
+                        if (remaining > 0 && remaining <= 100) {
+                          setParticipants((prev) =>
+                            prev.map((part, i) =>
+                              i === idx ? { ...part, percent: (part.percent || 0) + remaining } : part
+                            )
+                          );
+                        }
+                      };
+
+                      return (
+                        <div className="boxed">
+                          <div className="validation-header">
+                            <span className="muted tiny">Assign % (sum to 100)</span>
+                            <span className={`validation-indicator ${isValid ? 'valid' : totalPct > 100 ? 'error' : 'warning'}`}>
+                              {totalPct.toFixed(0)}% {isValid ? '✓' : totalPct > 100 ? '(over!)' : `(${remaining.toFixed(0)}% left)`}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          {participants.map((p, idx) => (
+                            <div key={p.id} className="inline-pair">
+                              <span className="muted small">{p.name || p.id}</span>
+                              <div className="input-with-action">
+                                <input
+                                  type="number"
+                                  className={`input compact ${(p.percent || 0) > 100 ? 'input-error' : ''}`}
+                                  placeholder="0"
+                                  min="0"
+                                  max="100"
+                                  value={p.percent || ""}
+                                  onChange={(e) => {
+                                    const newVal = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                                    setParticipants((prev) =>
+                                      prev.map((part, i) =>
+                                        i === idx ? { ...part, percent: newVal } : part
+                                      )
+                                    );
+                                  }}
+                                />
+                                {remaining > 0 && (p.percent || 0) === 0 && (
+                                  <button
+                                    type="button"
+                                    className="auto-fill-btn"
+                                    onClick={() => handleAutoFill(idx)}
+                                    title={`Fill ${remaining.toFixed(0)}%`}
+                                  >
+                                    +{remaining.toFixed(0)}%
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {splitMethod === "EXACT_AMOUNTS" && (() => {
+                      const totalExact = participants.reduce((sum, p) => sum + (p.exact || 0), 0);
+                      const isValid = Math.abs(totalExact - amount) < 0.01;
+                      const remaining = amount - totalExact;
+
+                      const handleAutoFill = (idx) => {
+                        if (remaining > 0) {
+                          setParticipants((prev) =>
+                            prev.map((part, i) =>
+                              i === idx ? { ...part, exact: (part.exact || 0) + remaining } : part
+                            )
+                          );
+                        }
+                      };
+
+                      return (
+                        <div className="boxed">
+                          <div className="validation-header">
+                            <span className="muted tiny">Enter exact amounts (must sum to ${amount.toFixed(2)})</span>
+                            <span className={`validation-indicator ${isValid ? 'valid' : totalExact > amount ? 'error' : 'warning'}`}>
+                              ${totalExact.toFixed(2)} {isValid ? '✓' : totalExact > amount ? '(over!)' : `($${remaining.toFixed(2)} left)`}
+                            </span>
+                          </div>
+                          {participants.map((p, idx) => (
+                            <div key={p.id} className="inline-pair">
+                              <span className="muted small">{p.name || p.id}</span>
+                              <div className="input-with-action">
+                                <input
+                                  type="number"
+                                  className={`input compact ${(p.exact || 0) > amount ? 'input-error' : ''}`}
+                                  placeholder="0"
+                                  min="0"
+                                  step="0.01"
+                                  value={p.exact || ""}
+                                  onChange={(e) => {
+                                    const newVal = Math.max(0, parseFloat(e.target.value) || 0);
+                                    setParticipants((prev) =>
+                                      prev.map((part, i) =>
+                                        i === idx ? { ...part, exact: newVal } : part
+                                      )
+                                    );
+                                  }}
+                                />
+                                {remaining > 0.01 && (p.exact || 0) === 0 && (
+                                  <button
+                                    type="button"
+                                    className="auto-fill-btn"
+                                    onClick={() => handleAutoFill(idx)}
+                                    title={`Fill $${remaining.toFixed(2)}`}
+                                  >
+                                    +${remaining.toFixed(0)}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {splitMethod === "SHARES" && (
                       <div className="boxed">

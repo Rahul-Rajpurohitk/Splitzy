@@ -1,21 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import AddGroupModal from './AddGroupModal';
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 import axios from 'axios';
-import { FiMessageCircle } from 'react-icons/fi';
-import { setExpenseFilter } from '../features/expense/expenseSlice';  // New action
 
-const Groups = ({ 
-  onOpenChat, 
-  isMobile = false,
+const Groups = ({
+  onOpenChat,
   externalTriggerAdd = false,
   onAddModalClosed,
   hideHeader = false
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [groups, setGroups] = useState([]);
-
-  const dispatch = useDispatch();
 
   const lastEvent = useSelector((state) => state.socket.lastEvent);
   const token = localStorage.getItem('splitzyToken');
@@ -83,14 +78,11 @@ const Groups = ({
     }
   }, [lastEvent]);
 
-  // Group click handler - different behavior for mobile vs desktop
+  // Group click handler - open chat on click
   const handleGroupClick = async (group) => {
-    if (isMobile && onOpenChat) {
-      // On mobile, clicking the row opens chat
+    if (onOpenChat) {
+      // Clicking a group opens chat
       await handleOpenGroupChat(group);
-    } else {
-      // On desktop, clicking the row filters expenses
-      dispatch(setExpenseFilter({ filterType: "group", filterEntity: group }));
     }
   };
 
@@ -119,24 +111,13 @@ const Groups = ({
           groups.map((group) => (
             <li
               key={group.id}
-              className={`list-row group-row ${isMobile ? 'mobile-clickable' : ''}`}
+              className="list-row group-row clickable"
               onClick={() => handleGroupClick(group)}
+              title="Click to open chat"
             >
               <div className="avatar-sm">{group.groupName?.[0] || "G"}</div>
               <span className="row-name">{group.groupName}</span>
-              <div className="group-actions">
-                {/* Only show chat button on desktop */}
-                {!isMobile && onOpenChat && (
-                  <button
-                    className="group-chat-btn desktop-only"
-                    onClick={(e) => handleOpenGroupChat(group, e)}
-                    title="Group chat"
-                  >
-                    <FiMessageCircle size={16} />
-                  </button>
-                )}
-                <span className="row-tag">{group.groupType || "Group"}</span>
-              </div>
+              <span className="row-tag">{group.groupType || "Group"}</span>
             </li>
           ))
         ) : (
