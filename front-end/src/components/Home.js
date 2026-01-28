@@ -779,7 +779,7 @@ function Home() {
                 <div className="mobile-page-header">
                   <h2>Menu</h2>
                 </div>
-                
+
                 {/* User Info */}
                 <div className="mobile-menu-user">
                   <div className="avatar avatar-lg">
@@ -790,26 +790,25 @@ function Home() {
                     <span className="mobile-menu-user-email">{localStorage.getItem('myUserEmail') || ''}</span>
                   </div>
                 </div>
-                
+
                 {/* Quick Actions */}
                 <div className="mobile-menu-actions">
                   <button className="mobile-menu-btn" onClick={() => setSelectedView('profile')}>
                     <span className="mobile-menu-btn-icon">👤</span>
                     <span>Profile</span>
                   </button>
-                  <ChatDropdown onSelectThread={(t) => { 
-                    handleOpenChat(t); 
-                    setSelectedView('dashboard');
-                  }} />
-                  <Notification />
+                  <button className="mobile-menu-btn" onClick={() => setSelectedView('analytics')}>
+                    <span className="mobile-menu-btn-icon">📊</span>
+                    <span>Analytics</span>
+                  </button>
                   <button className="mobile-menu-btn danger" onClick={handleLogout}>
                     <span className="mobile-menu-btn-icon">🚪</span>
                     <span>Logout</span>
                   </button>
                 </div>
-                
+
                 <div className="panel-divider" />
-                
+
                 {/* Balance Cards */}
                 <div className="mobile-menu-section">
                   <h3>Your Balance</h3>
