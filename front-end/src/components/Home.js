@@ -775,31 +775,31 @@ function Home() {
             
             {/* Mobile Menu View */}
             {selectedView === 'menu' && (
-              <div className="mobile-page-view">
-                {/* User Info Header */}
-                <div className="mobile-menu-user">
-                  <div className="avatar avatar-lg">
-                    {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
+              <div className="mobile-page-view menu-view">
+                {/* User Profile Card */}
+                <div className="menu-card user-card">
+                  <div className="menu-user-row">
+                    <div className="avatar avatar-lg">
+                      {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
+                    </div>
+                    <div className="menu-user-info">
+                      <span className="menu-user-name">{username || 'You'}</span>
+                      <span className="menu-user-email">{localStorage.getItem('myUserEmail') || ''}</span>
+                    </div>
                   </div>
-                  <div className="mobile-menu-user-details">
-                    <span className="mobile-menu-user-name">{username || 'You'}</span>
-                    <span className="mobile-menu-user-email">{localStorage.getItem('myUserEmail') || ''}</span>
+                  <div className="menu-user-actions">
+                    <button className="menu-action-btn" onClick={() => setSelectedView('profile')}>
+                      <FiUsers size={16} />
+                      <span>Profile</span>
+                    </button>
+                    <button className="menu-action-btn danger" onClick={handleLogout}>
+                      <FiX size={16} />
+                      <span>Logout</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="mobile-menu-actions">
-                  <button className="mobile-menu-btn" onClick={() => setSelectedView('profile')}>
-                    <span className="mobile-menu-btn-icon">👤</span>
-                    <span>Profile & Settings</span>
-                  </button>
-                  <button className="mobile-menu-btn danger" onClick={handleLogout}>
-                    <span className="mobile-menu-btn-icon">🚪</span>
-                    <span>Logout</span>
-                  </button>
-                </div>
-
-                {/* Balance Cards */}
+                {/* Balance Section */}
                 <div className="mobile-menu-section">
                   <h3>Your Balance</h3>
                   <div className="balance-cards-container">
@@ -863,12 +863,9 @@ function Home() {
                   </div>
                 </div>
 
-                {/* Monthly Spending Summary */}
+                {/* This Month Card */}
                 <div className="mobile-menu-section">
-                  <h3>
-                    <FiTrendingUp size={12} style={{ marginRight: '6px' }} />
-                    This Month
-                  </h3>
+                  <h3><FiTrendingUp size={14} /> This Month</h3>
                   <div className="monthly-summary-card">
                     <div className="monthly-amount">${safeFixed(statsData.thisMonthTotal, 0)}</div>
                     <div className="monthly-comparison">
@@ -882,7 +879,7 @@ function Home() {
                   </div>
                 </div>
 
-                {/* KPI Grid */}
+                {/* Overview KPIs */}
                 <div className="mobile-menu-section">
                   <h3>Overview</h3>
                   <div className="kpi-grid-home">
@@ -909,8 +906,9 @@ function Home() {
                   </div>
                 </div>
 
-                {/* Secondary Stats */}
+                {/* Stats Card */}
                 <div className="mobile-menu-section">
+                  <h3>Stats</h3>
                   <div className="secondary-kpis">
                     <div className="secondary-kpi">
                       <span className="sk-label">Avg per expense</span>
@@ -929,10 +927,7 @@ function Home() {
 
                 {/* Recent Activity */}
                 <div className="mobile-menu-section">
-                  <h3>
-                    <FiClock size={12} style={{ marginRight: '6px' }} />
-                    Recent Activity
-                  </h3>
+                  <h3><FiClock size={14} /> Recent Activity</h3>
                   <div className="activity-list">
                     {recentActivity.length > 0 ? (
                       recentActivity.map((activity, idx) => (

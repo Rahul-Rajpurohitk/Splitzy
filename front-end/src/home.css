@@ -5639,22 +5639,30 @@ html {
     margin: 0;
   }
 
-  /* Mobile Menu User Section */
-  .mobile-menu-user {
+  /* Mobile Menu - User Profile Card */
+  .menu-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .menu-card.user-card {
+    padding: 20px;
+  }
+
+  .menu-user-row {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 20px;
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
-  .mobile-menu-user .avatar {
-    width: 56px;
-    height: 56px;
-    font-size: 1.4rem;
+  .menu-user-row .avatar {
+    width: 52px;
+    height: 52px;
+    font-size: 1.3rem;
     background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
     border-radius: 50%;
     display: flex;
@@ -5662,149 +5670,263 @@ html {
     justify-content: center;
     color: #fff;
     font-weight: 600;
+    flex-shrink: 0;
   }
 
-  .mobile-menu-user .avatar-lg {
-    width: 56px;
-    height: 56px;
-    font-size: 1.4rem;
-  }
-
-  .mobile-menu-user .avatar-img {
+  .menu-user-row .avatar-img {
     width: 100%;
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
   }
 
-  .mobile-menu-user-details {
+  .menu-user-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
   }
 
-  .mobile-menu-user-name {
+  .menu-user-name {
     font-size: 1.1rem;
     font-weight: 600;
     color: #fff;
   }
 
-  .mobile-menu-user-email {
+  .menu-user-email {
     font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  /* Mobile Menu Actions */
-  .mobile-menu-actions {
+  .menu-user-actions {
     display: flex;
-    flex-direction: column;
     gap: 10px;
-    margin-bottom: 24px;
   }
 
-  .mobile-menu-btn {
+  .menu-action-btn {
+    flex: 1;
     display: flex;
     align-items: center;
-    gap: 14px;
-    width: 100%;
-    padding: 16px 20px;
-    background: rgba(30, 41, 59, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
     color: rgba(255, 255, 255, 0.85);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
-    text-align: left;
   }
 
-  .mobile-menu-btn:active {
-    background: rgba(59, 130, 246, 0.15);
-    transform: scale(0.98);
+  .menu-action-btn:active {
+    background: rgba(56, 189, 248, 0.15);
+    transform: scale(0.97);
   }
 
-  .mobile-menu-btn.danger {
+  .menu-action-btn.danger {
     color: #f87171;
-    border-color: rgba(248, 113, 113, 0.2);
+    border-color: rgba(248, 113, 113, 0.15);
   }
 
-  .mobile-menu-btn.danger:active {
+  .menu-action-btn.danger:active {
     background: rgba(248, 113, 113, 0.15);
   }
 
-  .mobile-menu-btn-icon {
-    font-size: 1.3rem;
-    width: 32px;
-    text-align: center;
+  .menu-action-btn svg {
+    flex-shrink: 0;
   }
 
-  /* Mobile Menu Sections */
+  /* ========================================
+     MOBILE MENU - Analytics-Style Card Design
+     ======================================== */
+
+  /* Section Header - like Analytics */
   .mobile-menu-section {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
 
   .mobile-menu-section h3 {
-    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.7);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 12px;
-    padding-left: 4px;
+    margin-bottom: 10px;
+    padding-left: 2px;
   }
 
-  /* Fix balance cards in mobile menu */
+  .mobile-menu-section h3 svg {
+    color: #38bdf8;
+  }
+
+  /* Analytics-style Card Container */
+  .menu-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s ease;
+  }
+
+  .menu-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Balance Cards - Full Width Single Card Display for Mobile */
   .mobile-page-view .balance-cards-container {
     background: transparent;
+    padding: 0;
+  }
+
+  .mobile-page-view .balance-cards-wrapper {
+    overflow: hidden;
+    border-radius: 14px;
+  }
+
+  .mobile-page-view .balance-cards-scroll {
+    display: flex;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .mobile-page-view .balance-card-slide {
-    background: rgba(30, 41, 59, 0.6) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .mobile-page-view .monthly-summary-card {
-    background: rgba(30, 41, 59, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    flex: 0 0 100%;
+    min-width: 100%;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
     border-radius: 14px;
     padding: 20px;
   }
 
-  /* KPI Grid in mobile menu */
+  .mobile-page-view .balance-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .mobile-page-view .balance-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-page-view .balance-dot.active {
+    background: #38bdf8;
+    width: 20px;
+    border-radius: 4px;
+  }
+
+  /* Monthly Summary Card */
+  .mobile-page-view .monthly-summary-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .mobile-page-view .monthly-amount {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .mobile-page-view .monthly-comparison {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .mobile-page-view .trend-badge {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .mobile-page-view .trend-badge.up {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .mobile-page-view .trend-badge.down {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  /* KPI Grid - Analytics Style */
   .mobile-page-view .kpi-grid-home {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
     background: transparent;
     padding: 0;
   }
 
   .mobile-page-view .kpi-item {
-    background: rgba(30, 41, 59, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 16px 12px;
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    padding: 12px 8px;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-page-view .kpi-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .mobile-page-view .kpi-emoji {
-    font-size: 1rem;
+    font-size: 1.3rem;
+    margin-bottom: 2px;
   }
 
   .mobile-page-view .kpi-number {
-    font-size: 1.1rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
   }
 
   .mobile-page-view .kpi-text {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
 
-  /* Secondary KPIs in mobile menu */
+  /* Secondary KPIs - Inline Stats Card */
   .mobile-page-view .secondary-kpis {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    background: transparent;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    overflow: hidden;
     padding: 0;
   }
 
@@ -5812,53 +5934,68 @@ html {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    background: rgba(30, 41, 59, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    padding: 14px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 0;
+  }
+
+  .mobile-page-view .secondary-kpi:last-child {
+    border-bottom: none;
   }
 
   .mobile-page-view .secondary-kpi .sk-label {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     color: rgba(255, 255, 255, 0.6);
   }
 
   .mobile-page-view .secondary-kpi .sk-value {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     font-weight: 600;
     color: #fff;
   }
 
   .mobile-page-view .secondary-kpi .sk-value.highlight {
-    color: #60a5fa;
+    color: #38bdf8;
   }
 
-  /* Activity list in mobile menu */
+  /* Activity List - Inside Card */
   .mobile-page-view .activity-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    overflow: hidden;
   }
 
   .mobile-page-view .activity-item {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 14px;
-    background: rgba(30, 41, 59, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    padding: 14px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 0;
+  }
+
+  .mobile-page-view .activity-item:last-child {
+    border-bottom: none;
   }
 
   .mobile-page-view .activity-icon {
     font-size: 1.2rem;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    flex-shrink: 0;
   }
 
   .mobile-page-view .activity-content {
@@ -5868,7 +6005,8 @@ html {
 
   .mobile-page-view .activity-desc {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+    font-weight: 500;
     color: #fff;
     white-space: nowrap;
     overflow: hidden;
@@ -5878,18 +6016,19 @@ html {
   .mobile-page-view .activity-meta {
     display: flex;
     gap: 8px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.4);
-    margin-top: 2px;
+    margin-top: 3px;
   }
 
   .mobile-page-view .activity-group {
-    color: rgba(96, 165, 250, 0.8);
+    color: #38bdf8;
   }
 
   .mobile-page-view .activity-amount {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     font-weight: 600;
+    flex-shrink: 0;
   }
 
   .mobile-page-view .activity-amount.positive {
@@ -5901,12 +6040,13 @@ html {
   }
 
   .mobile-page-view .no-activity {
-    padding: 20px;
+    padding: 24px;
     text-align: center;
     color: rgba(255, 255, 255, 0.4);
     font-size: 0.85rem;
-    background: rgba(30, 41, 59, 0.3);
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
   }
 
   /* Mobile overlay active - prevent background scroll */
