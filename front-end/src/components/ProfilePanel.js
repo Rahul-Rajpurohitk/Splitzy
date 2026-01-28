@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { FiLoader } from "react-icons/fi";
+import { FiLoader, FiArrowLeft } from "react-icons/fi";
 
 function ProfilePanel({ mode = "profile", onBack, onUpdatedProfile }) {
   const token = localStorage.getItem("splitzyToken");
@@ -103,6 +103,11 @@ function ProfilePanel({ mode = "profile", onBack, onUpdatedProfile }) {
   return (
     <div className="profile-panel">
       <div className="profile-header">
+        {onBack && (
+          <button className="back-btn mobile-only" onClick={onBack}>
+            <FiArrowLeft size={20} />
+          </button>
+        )}
         <div>
           <p className="kicker">Account</p>
           <h2 className="panel-title">Profile & Security</h2>

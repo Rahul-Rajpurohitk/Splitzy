@@ -683,7 +683,7 @@ function Home() {
             {selectedView === 'profile' && (
               <ProfilePanel
                 mode={selectedView}
-                onBack={() => setSelectedView('dashboard')}
+                onBack={() => setSelectedView(isMobile ? 'menu' : 'dashboard')}
                 onUpdatedProfile={(p) => {
                   if (p.name) localStorage.setItem('myUserName', p.name);
                   if (p.email) localStorage.setItem('myUserEmail', p.email);
@@ -776,11 +776,7 @@ function Home() {
             {/* Mobile Menu View */}
             {selectedView === 'menu' && (
               <div className="mobile-page-view">
-                <div className="mobile-page-header">
-                  <h2>Menu</h2>
-                </div>
-
-                {/* User Info */}
+                {/* User Info Header */}
                 <div className="mobile-menu-user">
                   <div className="avatar avatar-lg">
                     {avatarUrl ? <img src={avatarUrl} alt="avatar" className="avatar-img" /> : (username || 'U')[0]}
@@ -795,11 +791,7 @@ function Home() {
                 <div className="mobile-menu-actions">
                   <button className="mobile-menu-btn" onClick={() => setSelectedView('profile')}>
                     <span className="mobile-menu-btn-icon">👤</span>
-                    <span>Profile</span>
-                  </button>
-                  <button className="mobile-menu-btn" onClick={() => setSelectedView('analytics')}>
-                    <span className="mobile-menu-btn-icon">📊</span>
-                    <span>Analytics</span>
+                    <span>Profile & Settings</span>
                   </button>
                   <button className="mobile-menu-btn danger" onClick={handleLogout}>
                     <span className="mobile-menu-btn-icon">🚪</span>
@@ -807,21 +799,20 @@ function Home() {
                   </button>
                 </div>
 
-                <div className="panel-divider" />
-
                 {/* Balance Cards */}
                 <div className="mobile-menu-section">
                   <h3>Your Balance</h3>
                   <div className="balance-cards-container">
                     <div className="balance-cards-wrapper">
-                      <div 
-                        className="balance-cards-scroll" 
+                      <div
+                        className="balance-cards-scroll"
                         style={{ transform: `translateX(-${balanceCardIndex * 100}%)` }}
                       >
                         <div className={`balance-card-slide ${balanceStatus}`}>
                           <div className="balance-header">
                             <span className="balance-icon" style={{ color: balanceColor }}>{balanceIcon}</span>
                             <span className="balance-title">Shared Balance</span>
+                            <span className="balance-type-badge">👥</span>
                           </div>
                           <div className="balance-amount" style={{ color: balanceColor }}>
                             {safeNumber(balanceData.sharedBalance) >= 0 ? '+' : '-'}${safeFixed(Math.abs(safeNumber(balanceData.sharedBalance)))}
@@ -841,6 +832,7 @@ function Home() {
                           <div className="balance-header">
                             <span className="balance-icon" style={{ color: '#818cf8' }}>💰</span>
                             <span className="balance-title">Personal Spending</span>
+                            <span className="balance-type-badge">👤</span>
                           </div>
                           <div className="balance-amount" style={{ color: '#818cf8' }}>
                             ${safeFixed(balanceData.personalTotal)}
@@ -859,21 +851,24 @@ function Home() {
                       </div>
                     </div>
                     <div className="balance-dots">
-                      <button 
+                      <button
                         className={`balance-dot ${balanceCardIndex === 0 ? 'active' : ''}`}
                         onClick={() => setBalanceCardIndex(0)}
                       />
-                      <button 
+                      <button
                         className={`balance-dot ${balanceCardIndex === 1 ? 'active' : ''}`}
                         onClick={() => setBalanceCardIndex(1)}
                       />
                     </div>
                   </div>
                 </div>
-                
-                {/* This Month Stats */}
+
+                {/* Monthly Spending Summary */}
                 <div className="mobile-menu-section">
-                  <h3>This Month</h3>
+                  <h3>
+                    <FiTrendingUp size={12} style={{ marginRight: '6px' }} />
+                    This Month
+                  </h3>
                   <div className="monthly-summary-card">
                     <div className="monthly-amount">${safeFixed(statsData.thisMonthTotal, 0)}</div>
                     <div className="monthly-comparison">
@@ -884,6 +879,82 @@ function Home() {
                       )}
                       <span className="vs-last">vs last month</span>
                     </div>
+                  </div>
+                </div>
+
+                {/* KPI Grid */}
+                <div className="mobile-menu-section">
+                  <h3>Overview</h3>
+                  <div className="kpi-grid-home">
+                    <div className="kpi-item total">
+                      <span className="kpi-emoji">📊</span>
+                      <span className="kpi-number">{safeNumber(statsData.totalExpenses, 0)}</span>
+                      <span className="kpi-text">Total</span>
+                    </div>
+                    <div className="kpi-item pending">
+                      <span className="kpi-emoji">⏳</span>
+                      <span className="kpi-number">{safeNumber(statsData.pendingCount, 0)}</span>
+                      <span className="kpi-text">Pending</span>
+                    </div>
+                    <div className="kpi-item settled">
+                      <span className="kpi-emoji">✓</span>
+                      <span className="kpi-number">{safeNumber(statsData.settledCount, 0)}</span>
+                      <span className="kpi-text">Settled</span>
+                    </div>
+                    <div className="kpi-item personal">
+                      <span className="kpi-emoji">👤</span>
+                      <span className="kpi-number">{safeNumber(statsData.personalCount, 0)}</span>
+                      <span className="kpi-text">Personal</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secondary Stats */}
+                <div className="mobile-menu-section">
+                  <div className="secondary-kpis">
+                    <div className="secondary-kpi">
+                      <span className="sk-label">Avg per expense</span>
+                      <span className="sk-value">${safeFixed(statsData.avgPerExpense, 0)}</span>
+                    </div>
+                    <div className="secondary-kpi">
+                      <span className="sk-label">Biggest this month</span>
+                      <span className="sk-value highlight">${safeFixed(statsData.biggestExpense, 0)}</span>
+                    </div>
+                    <div className="secondary-kpi">
+                      <span className="sk-label">This week</span>
+                      <span className="sk-value">{safeNumber(statsData.thisWeekCount, 0)} expenses</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Activity */}
+                <div className="mobile-menu-section">
+                  <h3>
+                    <FiClock size={12} style={{ marginRight: '6px' }} />
+                    Recent Activity
+                  </h3>
+                  <div className="activity-list">
+                    {recentActivity.length > 0 ? (
+                      recentActivity.map((activity, idx) => (
+                        <div key={activity.id || idx} className="activity-item">
+                          <div className="activity-icon">
+                            {getCategoryIcon(activity.category)}
+                          </div>
+                          <div className="activity-content">
+                            <span className="activity-desc">{activity.description}</span>
+                            <span className="activity-meta">
+                              {activity.groupName && <span className="activity-group">{activity.groupName}</span>}
+                              <span className="activity-time">{formatTimeAgo(activity.date)}</span>
+                            </span>
+                          </div>
+                          <div className={`activity-amount ${activity.net >= 0 ? 'positive' : 'negative'}`}>
+                            {activity.net >= 0 ? '+' : ''}{activity.net.toFixed(2)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="no-activity">No recent activity</div>
+                    )}
                   </div>
                 </div>
               </div>
