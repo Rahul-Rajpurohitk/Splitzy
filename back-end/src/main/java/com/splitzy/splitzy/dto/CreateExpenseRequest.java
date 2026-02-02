@@ -1,5 +1,6 @@
 package com.splitzy.splitzy.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,6 +38,7 @@ public class CreateExpenseRequest {
     private String fullOwe;
     
     // Personal expense flag - not shared with others
+    @JsonProperty("isPersonal")
     private boolean isPersonal = false;
 
 

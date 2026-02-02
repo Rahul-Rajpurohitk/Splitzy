@@ -27,13 +27,23 @@ public class ExpenseController {
     @GetMapping("/user-expenses")
     public ResponseEntity<List<Expense>> getUserExpenses(
             @RequestParam String userId,
-            @RequestParam(required = false, defaultValue = "ALL") String filter
+            @RequestParam(required = false, defaultValue = "ALL") String filter,
+            @RequestParam(required = false) String owingFilter,
+            @RequestParam(required = false) String settledFilter,
+            @RequestParam(required = false) String friendId,
+            @RequestParam(required = false) String groupId,
+            @RequestParam(required = false) String typeFilter,
+            @RequestParam(required = false) String partialFilter,
+            @RequestParam(required = false) String categoryFilter,
+            @RequestParam(required = false) String dateRangeFilter
     ) {
         if (userId == null || userId.trim().isEmpty()) {
             throw new IllegalArgumentException("userId is required");
         }
-        logger.debug("Getting expenses for user: {}, filter: {}", userId, filter);
-        List<Expense> expenses = expenseService.getExpensesForUser(userId, filter);
+        logger.debug("Getting expenses for user: {}, filter: {}, owingFilter: {}, settledFilter: {}, friendId: {}, groupId: {}, typeFilter: {}, partialFilter: {}, categoryFilter: {}, dateRangeFilter: {}",
+                userId, filter, owingFilter, settledFilter, friendId, groupId, typeFilter, partialFilter, categoryFilter, dateRangeFilter);
+        List<Expense> expenses = expenseService.getExpensesForUserFiltered(
+                userId, filter, owingFilter, settledFilter, friendId, groupId, typeFilter, partialFilter, categoryFilter, dateRangeFilter);
         return ResponseEntity.ok(expenses != null ? expenses : Collections.emptyList());
     }
 

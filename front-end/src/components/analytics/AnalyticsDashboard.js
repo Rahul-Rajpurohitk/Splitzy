@@ -106,6 +106,303 @@ function formatCurrency(amount) {
   }).format(amount || 0);
 }
 
+// Parse date string without timezone issues
+// When JS parses "2026-01-27" it treats it as UTC midnight, which shifts day in local timezone
+function parseDateLocal(dateStr) {
+  if (!dateStr) return new Date();
+  const str = String(dateStr);
+  // Handle ISO date strings like "2026-01-27" or "2026-01-27T10:30:00"
+  const datePart = str.split('T')[0];
+  const parts = datePart.split('-');
+  if (parts.length === 3) {
+    // Create date in local timezone (months are 0-indexed)
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  }
+  return new Date(dateStr);
+}
+
+// ============ TREND CHART WITH HOVER ============
+const TrendChartWithHover = ({ trendPoints, formatCurrency }) => {
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const svgRef = useRef(null);
+
+  const maxVal = Math.max(...trendPoints.map(p => p.spending || 0), 1);
+
+  const pointsData = trendPoints.map((p, i) => {
+    const x = (i / Math.max(trendPoints.length - 1, 1)) * 400;
+    const y = 70 - ((p.spending || 0) / maxVal) * 60;
+    return { x, y, spending: p.spending || 0, label: p.label };
+  });
+
+  const pointsString = pointsData.map(p => `${p.x},${p.y}`).join(' ');
+  const areaPath = `M0,70 L${pointsString} L400,70 Z`;
+
+  return (
+    <div className="area-chart">
+      <div className="trend-chart-container">
+        <svg ref={svgRef} viewBox="0 0 400 80" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="areaGradientInline" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4"/>
+              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.05"/>
+            </linearGradient>
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Area fill */}
+          <path d={areaPath} fill="url(#areaGradientInline)" />
+
+          {/* Line */}
+          <polyline
+            points={pointsString}
+            fill="none"
+            stroke="#38bdf8"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Hover vertical line */}
+          {hoveredPoint !== null && (
+            <line
+              x1={pointsData[hoveredPoint].x}
+              y1="0"
+              x2={pointsData[hoveredPoint].x}
+              y2="70"
+              stroke="rgba(56, 189, 248, 0.3)"
+              strokeWidth="1"
+              strokeDasharray="3,3"
+            />
+          )}
+
+          {/* Data points (circles) */}
+          {pointsData.map((point, i) => (
+            <g key={i}>
+              {/* Larger invisible hit area for easier hover */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="12"
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHoveredPoint(i)}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+              {/* Visible point */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={hoveredPoint === i ? 6 : 3}
+                fill={hoveredPoint === i ? '#38bdf8' : '#1e293b'}
+                stroke="#38bdf8"
+                strokeWidth="2"
+                filter={hoveredPoint === i ? 'url(#glow)' : 'none'}
+                style={{
+                  transition: 'r 0.15s ease, fill 0.15s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={() => setHoveredPoint(i)}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+            </g>
+          ))}
+        </svg>
+
+        {/* Hover tooltip */}
+        {hoveredPoint !== null && (
+          <div
+            className="trend-hover-tooltip"
+            style={{
+              left: `${(pointsData[hoveredPoint].x / 400) * 100}%`,
+              top: `${(pointsData[hoveredPoint].y / 80) * 100}%`
+            }}
+          >
+            <span className="tooltip-value">{formatCurrency(pointsData[hoveredPoint].spending)}</span>
+            <span className="tooltip-label">{pointsData[hoveredPoint].label}</span>
+          </div>
+        )}
+      </div>
+      <div className="chart-labels">
+        {trendPoints.filter((_, i) => i % Math.ceil(trendPoints.length / 5) === 0).map((p, i) => (
+          <span key={i}>{p.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ============ INTERACTIVE DONUT CHART WITH HOVER ============
+const InteractiveDonutChart = ({
+  categoryBreakdown,
+  totalSpend,
+  filterCategory,
+  setFilterCategory,
+  formatCurrency,
+  colors,
+  allCategories // Pass all categories for stable color mapping
+}) => {
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+
+  const r = 38;
+  const circumference = 2 * Math.PI * r;
+
+  // Create stable color mapping based on all categories (not filtered)
+  const categoryColorMap = useMemo(() => {
+    const map = {};
+    allCategories.forEach((cat, i) => {
+      map[cat.category] = colors[i % colors.length];
+    });
+    return map;
+  }, [allCategories, colors]);
+
+  // Build segments with cumulative offsets and stable colors
+  let cumulative = 0;
+  const segments = categoryBreakdown.slice(0, 6).map((cat, i) => {
+    const pct = totalSpend > 0 ? (cat.amount / totalSpend) * 100 : 0;
+    const offset = cumulative;
+    cumulative += pct;
+
+    return {
+      ...cat,
+      percentage: pct,
+      offset: offset,
+      length: (pct / 100) * circumference,
+      dashOffset: -(offset / 100) * circumference,
+      color: categoryColorMap[cat.category] || colors[i % colors.length],
+      index: i
+    };
+  });
+
+  const hoveredCat = hoveredIndex !== null ? segments[hoveredIndex] : null;
+  const selectedCat = filterCategory ? segments.find(s => s.category === filterCategory) : null;
+  const displayCat = hoveredCat || selectedCat;
+
+  return (
+    <div
+      className="interactive-donut-container"
+      onMouseLeave={() => setHoveredIndex(null)}
+    >
+      <svg viewBox="0 0 100 100" className="interactive-donut-svg">
+        <defs>
+          <filter id="donutGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Background ring */}
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="12"/>
+
+        {/* Segments */}
+        {segments.map((seg, i) => {
+          const isHovered = hoveredIndex === i;
+          const isSelected = filterCategory === seg.category;
+          const hasHover = hoveredIndex !== null;
+          const hasSelection = filterCategory !== '';
+
+          let opacity = 1;
+          if (hasHover && !isHovered) opacity = 0.4;
+          else if (!hasHover && hasSelection && !isSelected) opacity = 0.5;
+
+          return (
+            <circle
+              key={i}
+              cx="50"
+              cy="50"
+              r={r}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={isHovered || isSelected ? 15 : 12}
+              strokeDasharray={`${seg.length} ${circumference - seg.length}`}
+              strokeDashoffset={seg.dashOffset}
+              transform="rotate(-90 50 50)"
+              opacity={opacity}
+              filter={isHovered ? 'url(#donutGlow)' : 'none'}
+              className="donut-segment"
+              onMouseEnter={() => setHoveredIndex(i)}
+              onClick={() => setFilterCategory(filterCategory === seg.category ? '' : seg.category)}
+            />
+          );
+        })}
+
+        {/* Center text */}
+        <text x="50" y="46" textAnchor="middle" className="donut-total">
+          {displayCat ? formatCurrency(displayCat.amount) : formatCurrency(totalSpend)}
+        </text>
+        <text x="50" y="57" textAnchor="middle" className="donut-label">
+          {displayCat ? `${displayCat.percentage.toFixed(1)}%` : 'TOTAL'}
+        </text>
+      </svg>
+
+      {/* Hover tooltip */}
+      {hoveredCat && (
+        <div className="donut-hover-tooltip-fixed">
+          <span className="tooltip-icon">{getCategoryIcon(hoveredCat.category)}</span>
+          <div className="tooltip-details">
+            <span className="tooltip-category">{hoveredCat.category}</span>
+            <span className="tooltip-amount">{formatCurrency(hoveredCat.amount)}</span>
+            <span className="tooltip-meta">{hoveredCat.count} expenses • {hoveredCat.percentage.toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============ WEEKDAY BAR CHART WITH HOVER ============
+const WeekdayBarChart = ({ weekdaySpending, formatCurrency }) => {
+  const [hoveredDay, setHoveredDay] = useState(null);
+  const maxVal = Math.max(...weekdaySpending.map(d => d.total), 1);
+
+  // Find highest spending day
+  const highestDay = weekdaySpending.reduce((max, d, i) =>
+    d.total > weekdaySpending[max].total ? i : max, 0);
+
+  return (
+    <div className="weekday-bars-container">
+      {weekdaySpending.map((day, i) => {
+        const heightPercent = day.total > 0 ? Math.max((day.total / maxVal) * 100, 8) : 5;
+        const isHovered = hoveredDay === i;
+        const isHighest = i === highestDay && day.total > 0;
+
+        return (
+          <div
+            key={i}
+            className={`weekday-bar-col ${isHovered ? 'hovered' : ''} ${isHighest ? 'highest' : ''}`}
+            onMouseEnter={() => setHoveredDay(i)}
+            onMouseLeave={() => setHoveredDay(null)}
+          >
+            <div className="weekday-bar-wrapper">
+              {/* Value label - shows on hover */}
+              <div className={`weekday-value-label ${isHovered ? 'visible' : ''}`}>
+                {formatCurrency(day.total)}
+              </div>
+
+              <div
+                className={`weekday-bar ${day.total > 0 ? 'active' : ''} ${isHovered ? 'hovered' : ''}`}
+                style={{
+                  height: `${heightPercent}%`,
+                }}
+              />
+            </div>
+            <span className={`weekday-label ${isHovered ? 'highlighted' : ''}`}>{day.name}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+
 function AnalyticsDashboard() {
   const token = localStorage.getItem('splitzyToken');
   const myUserId = localStorage.getItem('myUserId');
@@ -121,17 +418,28 @@ function AnalyticsDashboard() {
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [dateRange, setDateRange] = useState('month');
-  const [granularity, setGranularity] = useState('DAILY');
+
+  // Compute granularity synchronously from dateRange to avoid race conditions
+  const granularity = useMemo(() => {
+    switch (dateRange) {
+      case 'week': return 'DAILY';
+      case 'month': return 'DAILY';
+      case 'quarter': return 'WEEKLY';
+      case 'year': return 'MONTHLY';
+      default: return 'DAILY';
+    }
+  }, [dateRange]);
   
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // all, settled, unsettled
   const [activeKPI, setActiveKPI] = useState(null); // For clickable KPIs
-  
+
   // Friend and Group filter states
   const [filterFriend, setFilterFriend] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
+
   const [friends, setFriends] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loadingFilters, setLoadingFilters] = useState(false);
@@ -185,7 +493,7 @@ function AnalyticsDashboard() {
       default: startDate.setMonth(now.getMonth() - 1);
     }
     result = result.filter(exp => {
-      const expDate = new Date(exp.date || exp.createdAt);
+      const expDate = parseDateLocal(exp.date || exp.createdAt);
       return expDate >= startDate && expDate <= now;
     });
     
@@ -221,7 +529,7 @@ function AnalyticsDashboard() {
     } else if (activeKPI === 'personal') {
       result = result.filter(exp => exp.isPersonal);
     }
-    
+
     return result;
   }, [expenses, dateRange, filterCategory, filterStatus, filterFriend, filterGroup, activeKPI]);
   
@@ -255,6 +563,27 @@ function AnalyticsDashboard() {
 
     const { startDate, endDate } = getDateRange();
 
+    // Build filter params
+    const filterParams = new URLSearchParams();
+    filterParams.set('startDate', startDate);
+    filterParams.set('endDate', endDate);
+    if (filterCategory) filterParams.set('category', filterCategory);
+    if (filterStatus && filterStatus !== 'all') filterParams.set('settledFilter', filterStatus);
+    if (filterFriend) filterParams.set('friendId', filterFriend);
+    if (filterGroup) filterParams.set('groupId', filterGroup);
+
+    // Additional params for trends
+    const trendParams = new URLSearchParams(filterParams);
+    trendParams.set('granularity', granularity);
+    trendParams.set('includeComparison', 'true');
+
+    // Params for balances (no date range needed)
+    const balanceParams = new URLSearchParams();
+    if (filterCategory) balanceParams.set('category', filterCategory);
+    if (filterStatus && filterStatus !== 'all') balanceParams.set('settledFilter', filterStatus);
+    if (filterFriend) balanceParams.set('friendId', filterFriend);
+    if (filterGroup) balanceParams.set('groupId', filterGroup);
+
     // Invalidate cache if force refresh
     if (forceRefresh) {
       invalidateCache('/analytics');
@@ -266,9 +595,9 @@ function AnalyticsDashboard() {
         (url) => cachedGet(url, {}, ANALYTICS_CACHE_TTL);
 
       const [summaryRes, trendsRes, balancesRes] = await Promise.allSettled([
-        fetchFn(`/analytics/summary?startDate=${startDate}&endDate=${endDate}`),
-        fetchFn(`/analytics/trends?startDate=${startDate}&endDate=${endDate}&granularity=${granularity}&includeComparison=true`),
-        fetchFn(`/analytics/balances`)
+        fetchFn(`/analytics/summary?${filterParams.toString()}`),
+        fetchFn(`/analytics/trends?${trendParams.toString()}`),
+        fetchFn(`/analytics/balances?${balanceParams.toString()}`)
       ]);
 
       // Handle partial failures gracefully
@@ -323,8 +652,8 @@ function AnalyticsDashboard() {
       setLoading(false);
       setIsBackgroundRefreshing(false);
     }
-  }, [token, getDateRange, granularity, initialLoadComplete]);
-  
+  }, [getDateRange, granularity, initialLoadComplete, filterCategory, filterStatus, filterFriend, filterGroup]);
+
   // Initial fetch - show loading spinner
   useEffect(() => {
     if (!initialLoadComplete) {
@@ -332,14 +661,15 @@ function AnalyticsDashboard() {
     }
   }, []); // Only run once on mount
 
-  // When dateRange or granularity changes, do a background refresh (no loading spinner)
+  // When any filter changes, do a background refresh (no loading spinner)
+  // Note: granularity is derived from dateRange via useMemo, so no need to watch it separately
   useEffect(() => {
     if (initialLoadComplete) {
       console.log('[Analytics] Filter changed - background refreshing');
       invalidateCache('/analytics');
       fetchAnalytics(true, true);
     }
-  }, [dateRange, granularity]); // Only trigger when these specific filters change
+  }, [dateRange, filterCategory, filterStatus, filterFriend, filterGroup]); // Trigger when any filter changes
 
   // Listen for real-time expense events via Redux socket state and refresh analytics in background
   const lastSocketEvent = useSelector((state) => state.socket.lastEvent);
@@ -359,15 +689,28 @@ function AnalyticsDashboard() {
     }
   }, [lastSocketEvent, fetchAnalytics]);
 
+  // Track expense list changes to refresh analytics when expenses are added/deleted
+  const prevExpenseCountRef = useRef(expenses.length);
+
   useEffect(() => {
-    switch (dateRange) {
-      case 'week': setGranularity('DAILY'); break;
-      case 'month': setGranularity('DAILY'); break;
-      case 'quarter': setGranularity('WEEKLY'); break;
-      case 'year': setGranularity('MONTHLY'); break;
-      default: setGranularity('DAILY');
+    // Skip initial load - only react to changes
+    if (!initialLoadComplete) {
+      prevExpenseCountRef.current = expenses.length;
+      return;
     }
-  }, [dateRange]);
+
+    // If expense count changed, trigger background refresh
+    if (prevExpenseCountRef.current !== expenses.length) {
+      console.log('[Analytics] Expense count changed:', prevExpenseCountRef.current, '->', expenses.length, '- background refreshing analytics');
+      prevExpenseCountRef.current = expenses.length;
+
+      // Invalidate cache and refresh
+      invalidateCache('/analytics');
+      fetchAnalytics(true, true);
+    }
+  }, [expenses.length, initialLoadComplete, fetchAnalytics]);
+
+  // Granularity is now computed via useMemo, no separate useEffect needed
 
   // ============ LOCAL CALCULATIONS FOR ADVANCED INSIGHTS ============
   
@@ -375,9 +718,9 @@ function AnalyticsDashboard() {
   const weekdaySpending = useMemo(() => {
     const data = Array(7).fill(0);
     const counts = Array(7).fill(0);
-    
+
     filteredExpenses.forEach(exp => {
-      const date = new Date(exp.date || exp.createdAt);
+      const date = parseDateLocal(exp.date || exp.createdAt);
       const day = date.getDay();
       const myPart = exp.participants?.find(p => p.userId === myUserId);
       if (myPart) {
@@ -385,7 +728,7 @@ function AnalyticsDashboard() {
         counts[day]++;
       }
     });
-    
+
     const maxSpend = Math.max(...data, 1);
     return WEEKDAYS.map((name, i) => ({
       name,
@@ -446,7 +789,7 @@ function AnalyticsDashboard() {
     let prevSpend = 0;
     
     expenses.forEach(exp => {
-      const date = new Date(exp.date || exp.createdAt);
+      const date = parseDateLocal(exp.date || exp.createdAt);
       const myPart = exp.participants?.find(p => p.userId === myUserId);
       if (myPart) {
         const share = myPart.share || 0;
@@ -483,7 +826,7 @@ function AnalyticsDashboard() {
     let spendingDays = new Set();
     
     periodExpenses.forEach(exp => {
-      const date = new Date(exp.date || exp.createdAt);
+      const date = parseDateLocal(exp.date || exp.createdAt);
       const myPart = exp.participants?.find(p => p.userId === myUserId);
       if (myPart) {
         periodSpend += myPart.share || 0;
@@ -537,7 +880,7 @@ function AnalyticsDashboard() {
   // Category breakdown from filtered expenses
   const categoryBreakdown = useMemo(() => {
     const categories = {};
-    
+
     filteredExpenses.forEach(exp => {
       const cat = exp.category || 'other';
       const myPart = exp.participants?.find(p => p.userId === myUserId);
@@ -549,11 +892,32 @@ function AnalyticsDashboard() {
         categories[cat].count++;
       }
     });
-    
+
     return Object.values(categories).sort((a, b) => b.amount - a.amount);
   }, [filteredExpenses, myUserId]);
 
   const totalCategorySpend = categoryBreakdown.reduce((sum, c) => sum + c.amount, 0);
+
+  // All categories for stable color mapping (computed from ALL expenses, not date-filtered)
+  // This ensures each category keeps its assigned color regardless of date range
+  const allCategoriesForColors = useMemo(() => {
+    const categories = {};
+
+    // Use ALL expenses to build stable color mapping
+    expenses.forEach(exp => {
+      const cat = exp.category || 'other';
+      const myPart = exp.participants?.find(p => p.userId === myUserId);
+      if (myPart) {
+        if (!categories[cat]) {
+          categories[cat] = { category: cat, amount: 0, count: 0 };
+        }
+        categories[cat].amount += myPart.share || 0;
+        categories[cat].count++;
+      }
+    });
+
+    return Object.values(categories).sort((a, b) => b.amount - a.amount);
+  }, [expenses, myUserId]);
 
   // Personal vs Shared expense breakdown
   const expenseTypeBreakdown = useMemo(() => {
@@ -594,7 +958,7 @@ function AnalyticsDashboard() {
       
       let total = 0;
       expenses.forEach(exp => {
-        const expDate = new Date(exp.date || exp.createdAt);
+        const expDate = parseDateLocal(exp.date || exp.createdAt);
         if (expDate >= monthStart && expDate <= monthEnd) {
           const myPart = exp.participants?.find(p => p.userId === myUserId);
           if (myPart) {
@@ -641,12 +1005,12 @@ function AnalyticsDashboard() {
   const spendingPatterns = useMemo(() => {
     const sortedExpenses = [...filteredExpenses]
       .filter(exp => exp.participants?.find(p => p.userId === myUserId))
-      .sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
-    
+      .sort((a, b) => parseDateLocal(a.date || a.createdAt) - parseDateLocal(b.date || b.createdAt));
+
     // Find biggest single day spend
     const dailySpending = {};
     sortedExpenses.forEach(exp => {
-      const dateKey = new Date(exp.date || exp.createdAt).toDateString();
+      const dateKey = parseDateLocal(exp.date || exp.createdAt).toDateString();
       const myPart = exp.participants?.find(p => p.userId === myUserId);
       if (!dailySpending[dateKey]) dailySpending[dateKey] = 0;
       dailySpending[dateKey] += myPart?.share || 0;
@@ -673,6 +1037,7 @@ function AnalyticsDashboard() {
       totalTransactions: sortedExpenses.length
     };
   }, [filteredExpenses, myUserId]);
+
 
   // Handle KPI click for filtering
   const handleKPIClick = (kpiType) => {
@@ -833,8 +1198,8 @@ function AnalyticsDashboard() {
               <Tooltip content="Filter expenses from a specific group">
                 <label><FiUsers size={12} /> Group</label>
               </Tooltip>
-              <select 
-                value={filterGroup} 
+              <select
+                value={filterGroup}
                 onChange={(e) => setFilterGroup(e.target.value)}
                 className="filter-select"
                 disabled={loadingFilters}
@@ -845,7 +1210,7 @@ function AnalyticsDashboard() {
                 ))}
               </select>
             </div>
-            
+
             {hasActiveFilters && (
               <button className="clear-filters-btn" onClick={clearFilters}>
                 <FiX size={12} /> Clear All
@@ -1073,68 +1438,47 @@ function AnalyticsDashboard() {
 
         {/* Main Analytics Grid: Category + Spending Trend Side by Side */}
         <div className="analytics-dual-grid">
-          {/* Category Breakdown with Donut */}
+          {/* Category Breakdown with Interactive Donut */}
           <div className="category-section">
             <div className="section-header">
-              <h3><FiPieChart size={14} /> Category Breakdown</h3>
+              <Tooltip content={INSIGHT_TOOLTIPS.category}>
+                <h3><FiPieChart size={14} /> Category Breakdown <FiInfo size={10} className="header-info" /></h3>
+              </Tooltip>
             </div>
-            
+
             <div className="category-visual">
               {categoryBreakdown.length > 0 ? (
                 <>
-                  <div className="donut-chart">
-                    <svg viewBox="0 0 100 100">
-                      {(() => {
-                        let cumulative = 0;
-                        return categoryBreakdown.slice(0, 6).map((cat, i) => {
-                          const pct = totalCategorySpend > 0 ? (cat.amount / totalCategorySpend) * 100 : 0;
-                          const start = cumulative;
-                          cumulative += pct;
-                          const r = 38;
-                          const circumference = 2 * Math.PI * r;
-                          const offset = (start / 100) * circumference;
-                          const length = (pct / 100) * circumference;
-                          
-                          return (
-                            <circle
-                              key={i}
-                              cx="50" cy="50" r={r}
-                              fill="none"
-                              stroke={CATEGORY_COLORS[i]}
-                              strokeWidth="12"
-                              strokeDasharray={`${length} ${circumference - length}`}
-                              strokeDashoffset={-offset}
-                              transform="rotate(-90 50 50)"
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => setFilterCategory(filterCategory === cat.category ? '' : cat.category)}
-                            />
-                          );
-                        });
-                      })()}
-                      <text x="50" y="46" textAnchor="middle" className="donut-total">
-                        {formatCurrency(totalCategorySpend)}
-                      </text>
-                      <text x="50" y="57" textAnchor="middle" className="donut-label">
-                        total
-                      </text>
-                    </svg>
-                  </div>
-                  
+                  <InteractiveDonutChart
+                    categoryBreakdown={categoryBreakdown}
+                    totalSpend={totalCategorySpend}
+                    filterCategory={filterCategory}
+                    setFilterCategory={setFilterCategory}
+                    formatCurrency={formatCurrency}
+                    colors={CATEGORY_COLORS}
+                    allCategories={allCategoriesForColors}
+                  />
+
                   <div className="category-legend">
-                    {categoryBreakdown.slice(0, 6).map((cat, i) => (
-                      <div 
-                        key={i} 
-                        className={`legend-item ${filterCategory === cat.category ? 'active' : ''}`}
-                        onClick={() => setFilterCategory(filterCategory === cat.category ? '' : cat.category)}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span className="legend-dot" style={{ background: CATEGORY_COLORS[i] }} />
-                        <span className="legend-icon">{getCategoryIcon(cat.category)}</span>
-                        <span className="legend-name">{cat.category}</span>
-                        <span className="legend-amount">{formatCurrency(cat.amount)}</span>
-                      </div>
-                    ))}
+                    {categoryBreakdown.slice(0, 6).map((cat, i) => {
+                      // Get stable color from allCategoriesForColors
+                      const colorIndex = allCategoriesForColors.findIndex(c => c.category === cat.category);
+                      const stableColor = CATEGORY_COLORS[colorIndex >= 0 ? colorIndex % CATEGORY_COLORS.length : i % CATEGORY_COLORS.length];
+                      return (
+                        <div
+                          key={i}
+                          className={`legend-item ${filterCategory === cat.category ? 'active' : ''}`}
+                          onClick={() => setFilterCategory(filterCategory === cat.category ? '' : cat.category)}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <span className="legend-dot" style={{ background: stableColor }} />
+                          <span className="legend-icon">{getCategoryIcon(cat.category)}</span>
+                          <span className="legend-name">{cat.category}</span>
+                          <span className="legend-amount">{formatCurrency(cat.amount)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               ) : (
@@ -1157,44 +1501,15 @@ function AnalyticsDashboard() {
                 </div>
               )}
             </div>
-            
+
             <div className="trend-chart-inline">
               {trendPoints.length > 0 ? (
-                <div className="area-chart">
-                  <svg viewBox="0 0 400 80" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="areaGradientInline" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4"/>
-                        <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.05"/>
-                      </linearGradient>
-                    </defs>
-                    {(() => {
-                      const maxVal = Math.max(...trendPoints.map(p => p.spending || 0), 1);
-                      const points = trendPoints.map((p, i) => {
-                        const x = (i / Math.max(trendPoints.length - 1, 1)) * 400;
-                        const y = 70 - ((p.spending || 0) / maxVal) * 60;
-                        return `${x},${y}`;
-                      }).join(' ');
-                      const areaPath = `M0,70 L${points} L400,70 Z`;
-                      return (
-                        <>
-                          <path d={areaPath} fill="url(#areaGradientInline)" />
-                          <polyline points={points} fill="none" stroke="#38bdf8" strokeWidth="2" />
-                        </>
-                      );
-                    })()}
-                  </svg>
-                  <div className="chart-labels">
-                    {trendPoints.filter((_, i) => i % Math.ceil(trendPoints.length / 5) === 0).map((p, i) => (
-                      <span key={i}>{p.label}</span>
-                    ))}
-                  </div>
-                </div>
+                <TrendChartWithHover trendPoints={trendPoints} formatCurrency={formatCurrency} />
               ) : (
                 <div className="no-data">No trend data</div>
               )}
             </div>
-            
+
             {trendSummary && (
               <div className="chart-stats-inline">
                 <div className="chart-stat">
@@ -1214,6 +1529,7 @@ function AnalyticsDashboard() {
           </div>
         </div>
 
+
         {/* Secondary Grid - Heatmap, Groups, Top Expenses */}
         <div className="analytics-secondary-grid">
           {/* Weekday Spending - Fixed Bar Chart */}
@@ -1221,38 +1537,15 @@ function AnalyticsDashboard() {
             <div className="section-header">
               <h3><FiGrid size={14} /> Spending by Day</h3>
             </div>
-            
-            <div className="weekday-bars-container">
-              {weekdaySpending.map((day, i) => {
-                // Calculate proper height based on max value
-                const maxVal = Math.max(...weekdaySpending.map(d => d.total), 1);
-                const heightPercent = day.total > 0 ? Math.max((day.total / maxVal) * 100, 8) : 5;
-                const opacity = day.total > 0 ? 0.5 + (day.total / maxVal) * 0.5 : 0.2;
-                
-                return (
-                  <div key={i} className="weekday-bar-col">
-                    <div className="weekday-bar-wrapper">
-                      <div 
-                        className={`weekday-bar ${day.total > 0 ? 'active' : ''}`}
-                        style={{ 
-                          height: `${heightPercent}%`,
-                          opacity: opacity
-                        }}
-                      />
-                      <span className="weekday-amount">{formatCurrency(day.total)}</span>
-                    </div>
-                    <span className="weekday-label">{day.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-            
+
+            <WeekdayBarChart weekdaySpending={weekdaySpending} formatCurrency={formatCurrency} />
+
             <div className="heatmap-insight">
               <FiStar size={12} />
               <span>
                 {(() => {
                   const maxDay = weekdaySpending.reduce((max, d) => d.total > max.total ? d : max, weekdaySpending[0]);
-                  return maxDay.total > 0 
+                  return maxDay.total > 0
                     ? `${maxDay.name} is your highest spending day`
                     : 'No spending data for this period';
                 })()}
@@ -1303,7 +1596,7 @@ function AnalyticsDashboard() {
                     <div className="expense-info">
                       <span className="expense-name">{exp.description}</span>
                       <span className="expense-date">
-                        {new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {parseDateLocal(exp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         {exp.isSettled && <span className="settled-badge">Settled</span>}
                       </span>
                     </div>

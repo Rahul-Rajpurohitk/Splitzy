@@ -591,8 +591,201 @@ public class ExpenseService {
             case "PARTICIPANT" -> expenseDao.findAllByParticipant(userId, sort);
             default -> expenseDao.findAllByUserInvolvement(userId, sort);
         };
-        
+
         return dtos.stream().map(this::toExpense).collect(Collectors.toList());
+    }
+
+    /**
+     * Get expenses for user with advanced filtering options.
+     * @param userId The user ID
+     * @param filter Basic filter (CREATOR, PAYER, PARTICIPANT, ALL)
+     * @param owingFilter Filter by owing status: "youOwe", "othersOwe", or null/all
+     * @param settledFilter Filter by settled status: "settled", "unsettled", or null/all
+     * @param friendId Filter by friend involvement (optional)
+     * @param groupId Filter by group (optional)
+     */
+    public List<Expense> getExpensesForUserFiltered(String userId, String filter,
+            String owingFilter, String settledFilter, String friendId, String groupId,
+            String typeFilter, String partialFilter, String categoryFilter, String dateRangeFilter) {
+        logger.debug("getExpensesForUserFiltered called with userId={}, filter={}, owingFilter={}, settledFilter={}, friendId={}, groupId={}, typeFilter={}, partialFilter={}, categoryFilter={}, dateRangeFilter={}",
+                userId, filter, owingFilter, settledFilter, friendId, groupId, typeFilter, partialFilter, categoryFilter, dateRangeFilter);
+
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        List<ExpenseDto> dtos;
+
+        // Start with base query based on friendId or groupId if provided
+        if (friendId != null && !friendId.trim().isEmpty()) {
+            dtos = expenseDao.findAllByBothUserInvolvement(userId, friendId, sort);
+        } else if (groupId != null && !groupId.trim().isEmpty()) {
+            dtos = expenseDao.findAllByGroupId(groupId, sort);
+        } else {
+            // Apply basic filter
+            dtos = switch (filter != null ? filter.toUpperCase() : "ALL") {
+                case "CREATOR" -> expenseDao.findAllByCreatorId(userId, sort);
+                case "PAYER" -> expenseDao.findAllByPayer(userId, sort);
+                case "PARTICIPANT" -> expenseDao.findAllByParticipant(userId, sort);
+                default -> expenseDao.findAllByUserInvolvement(userId, sort);
+            };
+        }
+
+        // Convert to Expense objects
+        List<Expense> expenses = dtos.stream().map(this::toExpense).collect(Collectors.toList());
+
+        // Apply owingFilter
+        if (owingFilter != null && !owingFilter.isEmpty() && !owingFilter.equalsIgnoreCase("all")) {
+            expenses = expenses.stream().filter(expense -> {
+                // Find user's participant record
+                Participant myParticipant = expense.getParticipants().stream()
+                        .filter(p -> userId.equals(p.getUserId()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (myParticipant == null) return true; // Include if user not found as participant
+
+                double myNet = myParticipant.getNet();
+                double myRemainingAmount = Math.abs(myParticipant.getShare() - myParticipant.getSettledAmount());
+                boolean isMyPartSettled = myParticipant.isFullySettled() || myRemainingAmount < 0.01;
+
+                if ("youOwe".equalsIgnoreCase(owingFilter)) {
+                    // User owes money: net < 0 and not settled
+                    return myNet < 0 && !isMyPartSettled;
+                } else if ("othersOwe".equalsIgnoreCase(owingFilter)) {
+                    // Others owe user: net > 0 and not settled
+                    return myNet > 0 && !isMyPartSettled;
+                }
+                return true;
+            }).collect(Collectors.toList());
+        }
+
+        // Apply settledFilter
+        if (settledFilter != null && !settledFilter.isEmpty() && !settledFilter.equalsIgnoreCase("all")) {
+            expenses = expenses.stream().filter(expense -> {
+                // Find user's participant record
+                Participant myParticipant = expense.getParticipants().stream()
+                        .filter(p -> userId.equals(p.getUserId()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (myParticipant == null) return true; // Include if user not found as participant
+
+                double myRemainingAmount = Math.abs(myParticipant.getShare() - myParticipant.getSettledAmount());
+                boolean isMyPartSettled = myParticipant.isFullySettled() || myRemainingAmount < 0.01;
+
+                if ("settled".equalsIgnoreCase(settledFilter)) {
+                    return isMyPartSettled;
+                } else if ("unsettled".equalsIgnoreCase(settledFilter)) {
+                    return !isMyPartSettled;
+                }
+                return true;
+            }).collect(Collectors.toList());
+        }
+
+        // Apply typeFilter (personal/shared)
+        // Personal = only 1 participant (yourself), Shared = multiple participants
+        if (typeFilter != null && !typeFilter.isEmpty() && !typeFilter.equalsIgnoreCase("all")) {
+            expenses = expenses.stream().filter(expense -> {
+                // Check if explicitly marked as personal OR has only 1 participant
+                boolean isPersonalExpense = expense.isPersonal() ||
+                    (expense.getParticipants() != null && expense.getParticipants().size() <= 1);
+                if ("personal".equalsIgnoreCase(typeFilter)) {
+                    return isPersonalExpense;
+                } else if ("shared".equalsIgnoreCase(typeFilter)) {
+                    return !isPersonalExpense;
+                }
+                return true;
+            }).collect(Collectors.toList());
+        }
+
+        // Apply partialFilter - checks only the CURRENT USER's partial payment status
+        // Not any participant - only shows expenses where YOU have a partial payment
+        if (partialFilter != null && !partialFilter.isEmpty() && !partialFilter.equalsIgnoreCase("all")) {
+            expenses = expenses.stream().filter(expense -> {
+                // Find the current user's participant record
+                Participant myParticipant = expense.getParticipants().stream()
+                        .filter(p -> userId.equals(p.getUserId()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (myParticipant == null) return false; // Exclude if user not a participant
+
+                // Check if current user has partial payment (some settled but not fully)
+                double settledAmount = myParticipant.getSettledAmount();
+                double share = myParticipant.getShare();
+                boolean fullySettled = myParticipant.isFullySettled() || Math.abs(share - settledAmount) < 0.01;
+                boolean hasPartialPayment = settledAmount > 0.01 && !fullySettled;
+
+                if ("partial".equalsIgnoreCase(partialFilter)) {
+                    return hasPartialPayment;
+                } else if ("none".equalsIgnoreCase(partialFilter)) {
+                    // No partial payments - either fully settled or no payments at all
+                    return !hasPartialPayment;
+                }
+                return true;
+            }).collect(Collectors.toList());
+        }
+
+        // Apply categoryFilter
+        if (categoryFilter != null && !categoryFilter.isEmpty() && !categoryFilter.equalsIgnoreCase("all")) {
+            expenses = expenses.stream().filter(expense -> {
+                String expenseCategory = expense.getCategory();
+                if (expenseCategory == null) return false;
+                return expenseCategory.equalsIgnoreCase(categoryFilter);
+            }).collect(Collectors.toList());
+        }
+
+        // Apply dateRangeFilter
+        if (dateRangeFilter != null && !dateRangeFilter.isEmpty() && !dateRangeFilter.equalsIgnoreCase("all")) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime startDate = null;
+            LocalDateTime endDate = now;
+
+            switch (dateRangeFilter.toLowerCase()) {
+                case "today":
+                    startDate = now.toLocalDate().atStartOfDay();
+                    break;
+                case "week":
+                    startDate = now.minusWeeks(1).toLocalDate().atStartOfDay();
+                    break;
+                case "month":
+                    startDate = now.withDayOfMonth(1).toLocalDate().atStartOfDay();
+                    break;
+                case "lastmonth":
+                    startDate = now.minusMonths(1).withDayOfMonth(1).toLocalDate().atStartOfDay();
+                    endDate = now.withDayOfMonth(1).toLocalDate().atStartOfDay().minusSeconds(1);
+                    break;
+                case "3months":
+                    startDate = now.minusMonths(3).toLocalDate().atStartOfDay();
+                    break;
+                case "6months":
+                    startDate = now.minusMonths(6).toLocalDate().atStartOfDay();
+                    break;
+                case "year":
+                    startDate = now.withDayOfYear(1).toLocalDate().atStartOfDay();
+                    break;
+            }
+
+            if (startDate != null) {
+                final LocalDateTime finalStartDate = startDate;
+                final LocalDateTime finalEndDate = endDate;
+                expenses = expenses.stream().filter(expense -> {
+                    // Use the 'date' field first (what users see on expense cards)
+                    // Fall back to 'createdAt' if date is null
+                    LocalDateTime expenseDate = null;
+                    java.time.LocalDate localDate = expense.getDate();
+                    if (localDate != null) {
+                        expenseDate = localDate.atStartOfDay();
+                    } else if (expense.getCreatedAt() != null) {
+                        expenseDate = expense.getCreatedAt();
+                    } else {
+                        return true; // Include if no date at all
+                    }
+                    return !expenseDate.isBefore(finalStartDate) && !expenseDate.isAfter(finalEndDate);
+                }).collect(Collectors.toList());
+            }
+        }
+
+        logger.debug("Filtered expenses count: {}", expenses.size());
+        return expenses;
     }
 
     public List<Expense> getExpensesForFriend(String userId, String friendId) {

@@ -4,7 +4,8 @@ import { useSelector, useDispatch } from "react-redux";
 import { FiUsers, FiCalendar, FiTag, FiDollarSign, FiChevronDown, FiChevronUp, FiShare2, FiTrash2, FiCheckCircle, FiX, FiMessageSquare } from "react-icons/fi";
 import ShareExpenseModal from "./ShareExpenseModal";
 import axios from "axios";
-import { fetchExpensesThunk } from "../../features/expense/expenseSlice";
+import { fetchExpensesThunk, fetchSingleExpenseThunk } from "../../features/expense/expenseSlice";
+import { invalidateCache } from "../../services/api";
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -78,6 +79,7 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [settleMode, setSettleMode] = useState('full'); // 'full' or 'partial'
   const [partialAmount, setPartialAmount] = useState('');
+  const [settleSuccess, setSettleSuccess] = useState(false); // Success indicator
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
   // For payer settlement - track individual amounts for each participant who owes
@@ -178,13 +180,25 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
       await axios.delete(`${API_URL}/home/expenses/${expenseId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // Refresh expenses after successful delete
-      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+
+      // Invalidate analytics cache so next fetch gets fresh data
+      invalidateCache('/analytics');
+      invalidateCache('/home/expenses');
+
+      // Small delay to ensure backend consistency before fetching
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Refresh expenses after successful delete - await to ensure state updates
+      await dispatch(fetchExpensesThunk({ userId: myUserId, token })).unwrap();
+
+      console.log('[ExpenseCard] Delete successful, expenses refreshed');
     } catch (err) {
       console.error('Error deleting expense:', err);
       // If expense not found (404 or 500), it's already deleted - refresh to sync UI
       if (err.response?.status === 404 || err.response?.status === 500) {
         console.log('Expense may already be deleted, refreshing list...');
+        invalidateCache('/analytics');
+        invalidateCache('/home/expenses');
         dispatch(fetchExpensesThunk({ userId: myUserId, token }));
       } else {
         alert('Failed to delete expense. Please try again.');
@@ -197,6 +211,7 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   // Handle settle expense - works for both debtor (settling own debt) and payer (recording received payments)
   const handleSettle = async () => {
     setIsSettling(true);
+    setSettleSuccess(false);
     try {
       // Check if user is a payer (lent money, positive net)
       const isPayer = myNet > 0;
@@ -237,12 +252,26 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
         });
       }
 
+      // Close modal and reset state
       setShowSettleModal(false);
       setParticipantSettlements({});
-      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+      setSettleSuccess(true);
+
+      // First, immediately fetch the updated single expense for instant UI feedback
+      await dispatch(fetchSingleExpenseThunk({ expenseId, userId: myUserId, token }));
+
+      // Then, refresh the full expense list to update counts and filters
+      // Use a small delay to ensure backend has processed the settlement
+      setTimeout(() => {
+        dispatch(fetchExpensesThunk({ userId: myUserId, token }));
+      }, 500);
+
+      // Clear success indicator after 3 seconds
+      setTimeout(() => setSettleSuccess(false), 3000);
+
     } catch (err) {
       console.error('Error settling expense:', err);
-      alert('Failed to settle expense');
+      alert('Failed to settle expense. Please try again.');
     } finally {
       setIsSettling(false);
     }
@@ -342,13 +371,14 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
       )}
 
       {/* Main card (swipeable) */}
-      <div 
-        className={`expense-card ${isSwiping ? 'swiping' : ''}`}
+      <div
+        className={`expense-card ${isSwiping ? 'swiping' : ''} ${settleSuccess ? 'settle-success' : ''}`}
         style={{ transform: `translateX(-${swipeOffset}px)` }}
         onClick={(e) => { if (!isSwiping && swipeOffset === 0) onToggleExpand(); else if (swipeOffset > 0) closeSwipe(); }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        data-testid="expense-card"
       >
         {/* Main row */}
         <div className="expense-main">

@@ -232,9 +232,27 @@
 
 .filter-row {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  align-items: flex-start;
+  gap: 16px;
   flex-wrap: wrap;
+}
+
+/* Responsive filter grid for many filters */
+@media (max-width: 1200px) {
+  .filter-row {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 800px) {
+  .filter-row {
+    gap: 10px;
+  }
+
+  .filter-item {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 140px;
+  }
 }
 
 .filter-item {
@@ -260,6 +278,8 @@
   border-radius: 8px;
   padding: 8px 12px;
   color: #fff;
+  min-height: 36px;
+  font-size: 0.8rem;
   font-size: 0.85rem;
   cursor: pointer;
   min-width: 160px;
@@ -272,18 +292,25 @@
 
 .filter-chips {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .filter-chip {
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;
-  background: transparent;
+  background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.7);
   font-size: 0.8rem;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .filter-chip:hover {
@@ -297,6 +324,9 @@
   border-color: transparent;
   font-weight: 600;
 }
+
+/* Amount range chips - slightly smaller */
+/* Removed smaller override - now chips match dropdown height */
 
 .clear-filters-btn {
   display: flex;
@@ -1087,27 +1117,29 @@
 
 .trend-chart-inline {
   flex: 1;
-  min-height: 100px;
-  margin: 10px 0;
+  min-height: 80px;
+  max-height: 120px;
 }
 
 .trend-chart-inline .area-chart {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+}
+
+.trend-chart-inline .trend-chart-container {
+  height: 100%;
 }
 
 .trend-chart-inline svg {
-  flex: 1;
   width: 100%;
-  min-height: 70px;
+  height: 80px;
 }
 
 .chart-stats-inline {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   justify-content: center;
   padding-top: 8px;
+  margin-top: 8px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 
@@ -1197,7 +1229,7 @@
 .chart-labels {
   display: flex;
   justify-content: space-between;
-  padding: 6px 0 0;
+  padding: 2px 0 0;
   font-size: 0.65rem;
   color: rgba(255,255,255,0.4);
 }
@@ -1257,6 +1289,131 @@
   font-size: 0.55rem;
   fill: rgba(255,255,255,0.5);
   text-transform: uppercase;
+}
+
+/* ========== INTERACTIVE DONUT CHART ========== */
+.interactive-donut-container {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 60px; /* Space for tooltip below */
+}
+
+.interactive-donut-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.interactive-donut-svg path {
+  transition: opacity 0.2s ease;
+}
+
+.donut-hover-tooltip {
+  position: absolute;
+  transform: translateX(-50%);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.15);
+  pointer-events: none;
+  z-index: 100;
+  animation: tooltipPop 0.15s ease-out;
+  white-space: nowrap;
+}
+
+.donut-hover-tooltip .tooltip-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.donut-hover-tooltip .tooltip-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.donut-hover-tooltip .tooltip-category {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  text-transform: capitalize;
+}
+
+.donut-hover-tooltip .tooltip-amount {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.donut-hover-tooltip .tooltip-meta {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.donut-hover-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0;
+  border-style: solid;
+  border-color: rgba(30, 41, 59, 0.98) transparent transparent;
+}
+
+/* Fixed tooltip that appears below the donut */
+.donut-hover-tooltip-fixed {
+  position: absolute;
+  top: 100%; /* Position below the container */
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.15);
+  z-index: 100;
+  animation: tooltipPop 0.15s ease-out;
+  white-space: nowrap;
+  pointer-events: none; /* Don't block clicks on donut segments */
+}
+
+.donut-hover-tooltip-fixed .tooltip-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.donut-hover-tooltip-fixed .tooltip-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.donut-hover-tooltip-fixed .tooltip-category {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  text-transform: capitalize;
+}
+
+.donut-hover-tooltip-fixed .tooltip-amount {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.donut-hover-tooltip-fixed .tooltip-meta {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .category-legend {
@@ -1341,7 +1498,72 @@
   padding: 14px;
 }
 
-/* Weekday Spending Bar Chart - FIXED */
+/* ========== TREND CHART WITH HOVER ========== */
+.trend-chart-container {
+  position: relative;
+  width: 100%;
+  height: 80px;
+}
+
+.trend-chart-container svg {
+  width: 100%;
+  height: 80px;
+  overflow: visible;
+}
+
+.trend-hover-tooltip {
+  position: absolute;
+  transform: translate(-50%, -130%);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.15);
+  pointer-events: none;
+  z-index: 100;
+  animation: tooltipPop 0.15s ease-out;
+}
+
+@keyframes tooltipPop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -120%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -130%) scale(1);
+  }
+}
+
+.trend-hover-tooltip .tooltip-value {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #38bdf8;
+  white-space: nowrap;
+}
+
+.trend-hover-tooltip .tooltip-label {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
+.trend-hover-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0;
+  border-style: solid;
+  border-color: rgba(30, 41, 59, 0.98) transparent transparent;
+}
+
+/* ========== Weekday Spending Bar Chart - ENHANCED ========== */
 .weekday-bars-container {
   display: flex;
   justify-content: space-between;
@@ -1356,6 +1578,12 @@
   flex-direction: column;
   align-items: center;
   max-width: 48px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.weekday-bar-col.hovered {
+  transform: translateY(-2px);
 }
 
 .weekday-bar-wrapper {
@@ -1374,7 +1602,7 @@
   max-width: 32px;
   border-radius: 6px 6px 2px 2px;
   background: linear-gradient(180deg, #38bdf8, #818cf8);
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   min-height: 4px;
 }
 
@@ -1382,26 +1610,51 @@
   background: rgba(255,255,255,0.1);
 }
 
-.weekday-bar-col:hover .weekday-bar {
-  filter: brightness(1.2);
-  transform: scaleX(1.05);
+.weekday-bar.hovered {
+  filter: brightness(1.3);
+  transform: scaleX(1.1);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
 }
 
-.weekday-amount {
+.weekday-bar-col.highest .weekday-bar {
+  background: linear-gradient(180deg, #22d3ee, #38bdf8);
+}
+
+/* Value label that shows on hover */
+.weekday-value-label {
   position: absolute;
-  top: -4px;
-  font-size: 0.6rem;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.8);
+  color: #38bdf8;
   white-space: nowrap;
   opacity: 0;
-  transform: translateY(8px);
+  pointer-events: none;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 12px rgba(56, 189, 248, 0.15);
+  z-index: 10;
 }
 
-.weekday-bar-col:hover .weekday-amount {
+.weekday-value-label::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px 5px 0;
+  border-style: solid;
+  border-color: rgba(30, 41, 59, 0.98) transparent transparent;
+}
+
+.weekday-value-label.visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0);
 }
 
 .weekday-label {
@@ -1410,10 +1663,12 @@
   color: rgba(255,255,255,0.5);
   margin-top: 8px;
   text-align: center;
+  transition: all 0.2s ease;
 }
 
-.weekday-bar-col:hover .weekday-label {
+.weekday-label.highlighted {
   color: #38bdf8;
+  font-weight: 700;
 }
 
 .heatmap-insight {
@@ -2255,4 +2510,172 @@
   white-space: nowrap !important;
   margin-left: 8px !important;
   font-size: 0.8rem !important;
+}
+
+/* ============ SPENDING COMPARISON CHART ============ */
+.spending-comparison-section {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.spending-comparison-section .section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.spending-comparison-section .section-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.spending-comparison-section .header-info {
+  color: rgba(255, 255, 255, 0.4);
+  cursor: help;
+}
+
+.spending-comparison-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comparison-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.comparison-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comparison-legend .legend-item .dot {
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.comparison-legend .legend-item.current .dot {
+  background: #38bdf8;
+}
+
+.comparison-legend .legend-item.previous .dot {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.comparison-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comparison-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 90px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.comparison-row:hover,
+.comparison-row.hovered {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.comparison-row .row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.comparison-row .cat-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.comparison-row .cat-name {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comparison-row .row-bars {
+  flex: 1;
+  min-width: 0;
+}
+
+.comparison-row .bar-track {
+  position: relative;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.comparison-row .bar {
+  position: absolute;
+  left: 0;
+  height: 50%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.comparison-row .bar.current {
+  top: 2px;
+}
+
+.comparison-row .bar.previous {
+  bottom: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.comparison-row .row-values {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.comparison-row .current-val {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.comparison-row .change-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 4px;
+  animation: fadeIn 0.15s ease;
+}
+
+.comparison-row .change-badge.up {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.comparison-row .change-badge.down {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
 }

@@ -19,6 +19,7 @@ public class AnalyticsFilter {
     private String groupId;       // Filter by specific group
     private String friendId;      // Filter by specific friend
     private String category;      // Filter by category
+    private String settledFilter; // "settled", "unsettled", or null for all
     
     // Comparison period (for period-over-period analysis)
     private boolean includeComparison = false;
@@ -71,7 +72,12 @@ public class AnalyticsFilter {
         this.category = category;
         return this;
     }
-    
+
+    public AnalyticsFilter withSettled(String settledFilter) {
+        this.settledFilter = settledFilter;
+        return this;
+    }
+
     public AnalyticsFilter withComparison(LocalDate compStart, LocalDate compEnd) {
         this.includeComparison = true;
         this.comparisonStartDate = compStart;
@@ -103,7 +109,10 @@ public class AnalyticsFilter {
     
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
-    
+
+    public String getSettledFilter() { return settledFilter; }
+    public void setSettledFilter(String settledFilter) { this.settledFilter = settledFilter; }
+
     public boolean isIncludeComparison() { return includeComparison; }
     public void setIncludeComparison(boolean includeComparison) { this.includeComparison = includeComparison; }
     

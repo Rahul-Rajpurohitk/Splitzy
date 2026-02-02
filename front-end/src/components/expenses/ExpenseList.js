@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { useSelector } from "react-redux";
 import MonthSection from "./MonthSection";
 
-function ExpenseList({ myUserId, onOpenChat }) {
+function ExpenseList({ myUserId, onOpenChat, filters = {} }) {
   const [expandedExpenseId, setExpandedExpenseId] = useState(null);
+  // Expenses are now filtered by backend, no client-side filtering needed
   const expenses = useSelector((state) => state.expense.list);
 
   // Group by Month/Year
@@ -31,12 +32,15 @@ function ExpenseList({ myUserId, onOpenChat }) {
     setExpandedExpenseId((prev) => (prev === expenseId ? null : expenseId));
   };
 
+  // Check if any filter is active
+  const hasActiveFilters = filters.owingFilter !== 'all' || filters.settledFilter !== 'all' || filters.friendFilter || filters.groupFilter;
+
   if (expenses.length === 0) {
     return (
       <div className="expense-empty">
-        <div className="empty-icon">📊</div>
-        <h3>No expenses yet</h3>
-        <p>Add your first expense to start tracking</p>
+        <div className="empty-icon">{hasActiveFilters ? '🔍' : '📊'}</div>
+        <h3>{hasActiveFilters ? 'No matching expenses' : 'No expenses yet'}</h3>
+        <p>{hasActiveFilters ? 'Try adjusting your filters' : 'Add your first expense to start tracking'}</p>
       </div>
     );
   }

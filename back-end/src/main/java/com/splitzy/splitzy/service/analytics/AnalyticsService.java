@@ -71,29 +71,32 @@ public class AnalyticsService {
         if (filter.getEndDate() == null) {
             filter.setEndDate(LocalDate.now());
         }
-        
+
         DashboardSummary summary = new DashboardSummary();
         summary.setGeneratedAt(LocalDateTime.now());
         summary.setPeriodLabel(formatPeriodLabel(filter.getStartDate(), filter.getEndDate()));
-        
+
         // Get all expenses for the user
         List<ExpenseSql> allExpenses = expenseRepo.findAllByUserInvolvement(
             userId, Sort.by(Sort.Direction.DESC, "date")
         );
-        
+
+        // Apply all filters (category, friend, group, settled)
+        List<ExpenseSql> filteredExpenses = applyAllFilters(allExpenses, userId, filter);
+
         // Filter by date range
-        List<ExpenseSql> periodExpenses = filterByDateRange(allExpenses, filter.getStartDate(), filter.getEndDate());
-        
-        // Calculate each section
-        summary.setBalance(calculateBalanceSummary(userId, allExpenses));
+        List<ExpenseSql> periodExpenses = filterByDateRange(filteredExpenses, filter.getStartDate(), filter.getEndDate());
+
+        // Calculate each section using filtered expenses
+        summary.setBalance(calculateBalanceSummary(userId, filteredExpenses));
         summary.setSpending(calculateSpendingSummary(userId, periodExpenses, filter));
-        summary.setSettlements(calculateSettlementSummary(userId, allExpenses));
-        summary.setActivity(calculateActivityMetrics(userId, periodExpenses, allExpenses));
-        summary.setQuickStats(calculateQuickStats(userId, allExpenses));
+        summary.setSettlements(calculateSettlementSummary(userId, filteredExpenses));
+        summary.setActivity(calculateActivityMetrics(userId, periodExpenses, filteredExpenses));
+        summary.setQuickStats(calculateQuickStats(userId, filteredExpenses));
         summary.setTopCategories(calculateTopCategories(userId, periodExpenses, 5));
         summary.setRecentExpenses(getRecentExpenseSnapshots(userId, periodExpenses, 5));
-        summary.setPendingActions(calculatePendingActions(userId, allExpenses));
-        
+        summary.setPendingActions(calculatePendingActions(userId, filteredExpenses));
+
         return summary;
     }
     
@@ -112,27 +115,17 @@ public class AnalyticsService {
         if (filter.getEndDate() == null) {
             filter.setEndDate(LocalDate.now());
         }
-        
+
         List<ExpenseSql> allExpenses = expenseRepo.findAllByUserInvolvement(
             userId, Sort.by(Sort.Direction.ASC, "date")
         );
-        
-        List<ExpenseSql> periodExpenses = filterByDateRange(allExpenses, filter.getStartDate(), filter.getEndDate());
-        
-        // Apply category filter if specified
-        if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
-            periodExpenses = periodExpenses.stream()
-                .filter(e -> filter.getCategory().equalsIgnoreCase(e.getCategory()))
-                .collect(Collectors.toList());
-        }
-        
-        // Apply group filter if specified
-        if (filter.getGroupId() != null && !filter.getGroupId().isEmpty()) {
-            periodExpenses = periodExpenses.stream()
-                .filter(e -> filter.getGroupId().equals(e.getGroupId()))
-                .collect(Collectors.toList());
-        }
-        
+
+        // Apply all filters (category, friend, group, settled)
+        List<ExpenseSql> filteredExpenses = applyAllFilters(allExpenses, userId, filter);
+
+        // Filter by date range
+        List<ExpenseSql> periodExpenses = filterByDateRange(filteredExpenses, filter.getStartDate(), filter.getEndDate());
+
         TrendData trendData = new TrendData();
         trendData.setPeriodType(filter.getGranularity().name());
         
@@ -228,18 +221,21 @@ public class AnalyticsService {
         if (filter.getEndDate() == null) {
             filter.setEndDate(LocalDate.now());
         }
-        
+
         List<ExpenseSql> allExpenses = expenseRepo.findAllByUserInvolvement(
             userId, Sort.by(Sort.Direction.DESC, "date")
         );
+
+        // Apply all filters (friend, group, settled - category is handled separately in this method)
+        List<ExpenseSql> filteredExpenses = applyAllFilters(allExpenses, userId, filter);
+
+        List<ExpenseSql> periodExpenses = filterByDateRange(filteredExpenses, filter.getStartDate(), filter.getEndDate());
         
-        List<ExpenseSql> periodExpenses = filterByDateRange(allExpenses, filter.getStartDate(), filter.getEndDate());
-        
-        // Get comparison period expenses (previous equivalent period)
+        // Get comparison period expenses (previous equivalent period) - use filtered expenses
         long daysDiff = ChronoUnit.DAYS.between(filter.getStartDate(), filter.getEndDate());
         LocalDate compStart = filter.getStartDate().minusDays(daysDiff + 1);
         LocalDate compEnd = filter.getStartDate().minusDays(1);
-        List<ExpenseSql> compExpenses = filterByDateRange(allExpenses, compStart, compEnd);
+        List<ExpenseSql> compExpenses = filterByDateRange(filteredExpenses, compStart, compEnd);
         
         CategoryAnalytics analytics = new CategoryAnalytics();
         
@@ -349,16 +345,19 @@ public class AnalyticsService {
         List<ExpenseSql> allExpenses = expenseRepo.findAllByUserInvolvement(
             userId, Sort.by(Sort.Direction.DESC, "date")
         );
-        
+
+        // Apply all filters (category, friend, group, settled)
+        List<ExpenseSql> filteredExpenses = applyAllFilters(allExpenses, userId, filter);
+
         BalanceAnalytics analytics = new BalanceAnalytics();
-        
-        // Calculate per-friend balances
+
+        // Calculate per-friend balances using filtered expenses
         Map<String, Double> friendBalances = new HashMap<>();
         Map<String, Integer> friendExpenseCounts = new HashMap<>();
         Map<String, Double> friendTotalShared = new HashMap<>();
         Map<String, LocalDateTime> friendLastActivity = new HashMap<>();
-        
-        for (ExpenseSql expense : allExpenses) {
+
+        for (ExpenseSql expense : filteredExpenses) {
             // Get all other participants
             Set<String> otherUsers = new HashSet<>();
             for (ParticipantSql p : expense.getParticipants()) {
@@ -443,11 +442,11 @@ public class AnalyticsService {
         }
         
         analytics.setOverview(overview);
-        
-        // Group balances
-        List<BalanceAnalytics.GroupBalance> groupBalanceList = calculateGroupBalances(userId, allExpenses);
+
+        // Group balances using filtered expenses
+        List<BalanceAnalytics.GroupBalance> groupBalanceList = calculateGroupBalances(userId, filteredExpenses);
         analytics.setGroupBalances(groupBalanceList);
-        
+
         return analytics;
     }
     
@@ -716,6 +715,62 @@ public class AnalyticsService {
             .filter(e -> !e.getDate().isBefore(start) && !e.getDate().isAfter(end))
             .collect(Collectors.toList());
     }
+
+    /**
+     * Apply all filter criteria to a list of expenses.
+     * This is the main filtering method that applies category, friend, group, and settled filters.
+     */
+    private List<ExpenseSql> applyAllFilters(List<ExpenseSql> expenses, String userId, AnalyticsFilter filter) {
+        List<ExpenseSql> result = new ArrayList<>(expenses);
+
+        // Apply category filter
+        if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
+            result = result.stream()
+                .filter(e -> filter.getCategory().equalsIgnoreCase(e.getCategory()))
+                .collect(Collectors.toList());
+        }
+
+        // Apply group filter
+        if (filter.getGroupId() != null && !filter.getGroupId().isEmpty()) {
+            result = result.stream()
+                .filter(e -> filter.getGroupId().equals(e.getGroupId()))
+                .collect(Collectors.toList());
+        }
+
+        // Apply friend filter - show expenses where this friend is a participant
+        if (filter.getFriendId() != null && !filter.getFriendId().isEmpty()) {
+            final String friendId = filter.getFriendId();
+            result = result.stream()
+                .filter(e -> {
+                    // Check if friend is in participants
+                    boolean inParticipants = e.getParticipants().stream()
+                        .anyMatch(p -> friendId.equals(p.getUserId()));
+                    // Check if friend is in payers
+                    boolean inPayers = e.getPayers().stream()
+                        .anyMatch(p -> friendId.equals(p.getUserId()));
+                    return inParticipants || inPayers;
+                })
+                .collect(Collectors.toList());
+        }
+
+        // Apply settled filter
+        if (filter.getSettledFilter() != null && !filter.getSettledFilter().isEmpty()) {
+            String settledFilter = filter.getSettledFilter().toLowerCase();
+            if ("settled".equals(settledFilter)) {
+                // Show only fully settled expenses
+                result = result.stream()
+                    .filter(ExpenseSql::isSettled)
+                    .collect(Collectors.toList());
+            } else if ("unsettled".equals(settledFilter)) {
+                // Show only unsettled expenses
+                result = result.stream()
+                    .filter(e -> !e.isSettled())
+                    .collect(Collectors.toList());
+            }
+        }
+
+        return result;
+    }
     
     private Map<String, List<ExpenseSql>> groupByPeriod(List<ExpenseSql> expenses, AnalyticsFilter.TimeGranularity granularity) {
         DateTimeFormatter formatter;
@@ -807,7 +862,14 @@ public class AnalyticsService {
                     LocalDate date = LocalDate.parse(periodKey);
                     return date.format(DateTimeFormatter.ofPattern("MMM d"));
                 case WEEKLY:
-                    return "Week " + periodKey.split("-W")[1];
+                    // Parse year and week from format "2025-W44" and get the Monday of that week
+                    String[] weekParts = periodKey.split("-W");
+                    int year = Integer.parseInt(weekParts[0]);
+                    int weekNum = Integer.parseInt(weekParts[1]);
+                    LocalDate weekStart = LocalDate.ofYearDay(year, 1)
+                        .with(WeekFields.ISO.weekOfWeekBasedYear(), weekNum)
+                        .with(WeekFields.ISO.dayOfWeek(), 1);
+                    return weekStart.format(DateTimeFormatter.ofPattern("MMM d"));
                 case MONTHLY:
                     String[] parts = periodKey.split("-");
                     return java.time.Month.of(Integer.parseInt(parts[1])).name().substring(0, 3) + " " + parts[0];

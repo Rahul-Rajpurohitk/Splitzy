@@ -2,16 +2,48 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// 1) Async Thunk to fetch all expenses for the user
+// 1) Async Thunk to fetch all expenses for the user with optional filters
 export const fetchExpensesThunk = createAsyncThunk(
   "expense/fetchAll",
-  async ({ userId, token }, thunkAPI) => {
+  async ({ userId, token, filters = {} }, thunkAPI) => {
     try {
       if (!userId) throw new Error("No userId provided");
+
+      // Build params with optional filters
+      const params = { userId, filter: "ALL" };
+
+      // Add optional filters if provided
+      if (filters.owingFilter && filters.owingFilter !== 'all') {
+        params.owingFilter = filters.owingFilter;
+      }
+      if (filters.settledFilter && filters.settledFilter !== 'all') {
+        params.settledFilter = filters.settledFilter;
+      }
+      if (filters.friendFilter?.id) {
+        params.friendId = filters.friendFilter.id;
+      }
+      if (filters.groupFilter?.id) {
+        params.groupId = filters.groupFilter.id;
+      }
+      // New filters: typeFilter (personal/shared) and partialFilter
+      if (filters.typeFilter && filters.typeFilter !== 'all') {
+        params.typeFilter = filters.typeFilter;
+      }
+      if (filters.partialFilter && filters.partialFilter !== 'all') {
+        params.partialFilter = filters.partialFilter;
+      }
+      // Category and date range filters
+      if (filters.categoryFilter && filters.categoryFilter !== 'all') {
+        params.categoryFilter = filters.categoryFilter;
+      }
+      if (filters.dateRangeFilter && filters.dateRangeFilter !== 'all') {
+        params.dateRangeFilter = filters.dateRangeFilter;
+      }
+
       const res = await axios.get(
         `${process.env.REACT_APP_API_URL}/home/expenses/user-expenses`,
         {
-          params: { userId, filter: "ALL" },
+          params,
           headers: { Authorization: `Bearer ${token}` },
         }
       );
@@ -97,15 +129,44 @@ export const fetchExpensesForGroupThunk = createAsyncThunk(
 
 // 6) Background sync thunk - silently updates without triggering loading state
 // Only updates Redux state if data actually changed (compares by JSON stringification)
+// Supports filters to maintain current filtered view
 export const backgroundSyncExpensesThunk = createAsyncThunk(
   "expense/backgroundSync",
-  async ({ userId, token }, thunkAPI) => {
+  async ({ userId, token, filters = {} }, thunkAPI) => {
     try {
       if (!userId) throw new Error("No userId provided");
+
+      // Build params with filters (same as fetchExpensesThunk)
+      const params = { userId, filter: "ALL" };
+      if (filters.owingFilter && filters.owingFilter !== 'all') {
+        params.owingFilter = filters.owingFilter;
+      }
+      if (filters.settledFilter && filters.settledFilter !== 'all') {
+        params.settledFilter = filters.settledFilter;
+      }
+      if (filters.friendFilter?.id) {
+        params.friendId = filters.friendFilter.id;
+      }
+      if (filters.groupFilter?.id) {
+        params.groupId = filters.groupFilter.id;
+      }
+      if (filters.typeFilter && filters.typeFilter !== 'all') {
+        params.typeFilter = filters.typeFilter;
+      }
+      if (filters.partialFilter && filters.partialFilter !== 'all') {
+        params.partialFilter = filters.partialFilter;
+      }
+      if (filters.categoryFilter && filters.categoryFilter !== 'all') {
+        params.categoryFilter = filters.categoryFilter;
+      }
+      if (filters.dateRangeFilter && filters.dateRangeFilter !== 'all') {
+        params.dateRangeFilter = filters.dateRangeFilter;
+      }
+
       const res = await axios.get(
         `${process.env.REACT_APP_API_URL}/home/expenses/user-expenses`,
         {
-          params: { userId, filter: "ALL" },
+          params,
           headers: { Authorization: `Bearer ${token}` },
         }
       );
@@ -114,10 +175,22 @@ export const backgroundSyncExpensesThunk = createAsyncThunk(
       const currentList = thunkAPI.getState().expense.list;
       const newData = res.data;
 
-      // Quick comparison by length and stringified content
-      const hasChanges = currentList.length !== newData.length ||
-        JSON.stringify(currentList.map(e => ({ id: e.id, updatedAt: e.updatedAt }))) !==
-        JSON.stringify(newData.map(e => ({ id: e.id, updatedAt: e.updatedAt })));
+      // Quick comparison - check if any expense was added, removed, or updated
+      const currentIds = new Set(currentList.map(e => e.id));
+      const newIds = new Set(newData.map(e => e.id));
+
+      // Check for added or removed expenses
+      const hasAddedOrRemoved = currentList.length !== newData.length ||
+        [...currentIds].some(id => !newIds.has(id)) ||
+        [...newIds].some(id => !currentIds.has(id));
+
+      // Check for updated expenses by comparing updatedAt timestamps
+      const hasUpdated = !hasAddedOrRemoved && newData.some(newExp => {
+        const currentExp = currentList.find(e => e.id === newExp.id);
+        return currentExp && currentExp.updatedAt !== newExp.updatedAt;
+      });
+
+      const hasChanges = hasAddedOrRemoved || hasUpdated;
 
       // Return data with flag indicating if update is needed
       return { data: newData, hasChanges };

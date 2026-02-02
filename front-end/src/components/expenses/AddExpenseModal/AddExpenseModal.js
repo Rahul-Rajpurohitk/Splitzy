@@ -850,17 +850,19 @@ function AddExpenseModal({ onClose, onSave }) {
           </div>
 
           {/* Personal Expense Toggle */}
-          <div className="personal-expense-toggle">
+          <div className="personal-expense-toggle" data-testid="personal-expense-toggle">
             <label className="toggle-switch">
               <input
                 type="checkbox"
+                id="personal-expense-checkbox"
+                name="isPersonal"
                 checked={isPersonal}
                 onChange={(e) => {
                   setIsPersonal(e.target.checked);
                   if (e.target.checked) {
                     // Reset to just the creator when switching to personal
-                    setParticipants([{ 
-                      id: myUserId, 
+                    setParticipants([{
+                      id: myUserId,
                       name: "You",
                       percent: 0, exact: 0, shares: 0,
                       paid: 0, owes: 0, net: 0
@@ -870,6 +872,8 @@ function AddExpenseModal({ onClose, onSave }) {
                     setSelectedGroup(null); // Clear group selection for personal expense
                   }
                 }}
+                aria-label="Toggle personal expense"
+                data-testid="personal-expense-checkbox"
               />
               <span className="slider"></span>
             </label>
@@ -949,25 +953,36 @@ function AddExpenseModal({ onClose, onSave }) {
           </div>
 
           <div className="form-section">
-            <label className="label">Description</label>
+            <label className="label" htmlFor="expense-description">Description</label>
             <input
               type="text"
+              id="expense-description"
+              name="description"
               className="input modern"
               placeholder="e.g. Dinner at Applebee's"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              aria-label="Expense description"
+              data-testid="expense-description-input"
+              autoComplete="off"
             />
           </div>
 
           <div className="amount-block">
-            <label className="label">Amount</label>
+            <label className="label" htmlFor="expense-amount">Amount</label>
             <input
               type="number"
+              id="expense-amount"
+              name="amount"
               step="0.01"
+              min="0"
               className="input modern amount-input"
               placeholder="0.00"
               value={amount || ""}
               onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              aria-label="Expense amount"
+              data-testid="expense-amount-input"
+              inputMode="decimal"
             />
             <div className="amount-meta">
               <div className="inline-text center">
@@ -1383,19 +1398,38 @@ function AddExpenseModal({ onClose, onSave }) {
           </div>
 
           <div className="form-section">
-            <label className="label">Notes</label>
+            <label className="label" htmlFor="expense-notes">Notes</label>
             <input
               type="text"
+              id="expense-notes"
+              name="notes"
               className="input modern"
               placeholder="Add notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              aria-label="Expense notes"
+              data-testid="expense-notes-input"
+              autoComplete="off"
             />
           </div>
 
           <div className="footer-actions">
-            <button className="chip ghost" onClick={onClose}>Cancel</button>
-            <button className="chip primary" onClick={handleSave}>Save</button>
+            <button
+              type="button"
+              className="chip ghost"
+              onClick={onClose}
+              data-testid="expense-cancel-btn"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="chip primary"
+              onClick={handleSave}
+              data-testid="expense-save-btn"
+            >
+              Save
+            </button>
           </div>
         </div>
 

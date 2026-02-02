@@ -39,15 +39,19 @@ public class AnalyticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) String groupId,
-            @RequestParam(required = false) String category) {
-        
+            @RequestParam(required = false) String friendId,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String settledFilter) {
+
         String userId = getUserId(auth);
-        
+
         AnalyticsFilter filter = AnalyticsFilter.builder()
             .withDateRange(startDate, endDate)
             .withGroup(groupId)
-            .withCategory(category);
-        
+            .withFriend(friendId)
+            .withCategory(category)
+            .withSettled(settledFilter);
+
         DashboardSummary summary = analyticsService.getDashboardSummary(userId, filter);
         return ResponseEntity.ok(summary);
     }
@@ -65,17 +69,19 @@ public class AnalyticsController {
             @RequestParam(required = false) String groupId,
             @RequestParam(required = false) String friendId,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) String settledFilter,
             @RequestParam(defaultValue = "false") boolean includeComparison) {
-        
+
         String userId = getUserId(auth);
-        
+
         AnalyticsFilter filter = AnalyticsFilter.builder()
             .withDateRange(startDate, endDate)
             .withGranularity(parseGranularity(granularity))
             .withGroup(groupId)
             .withFriend(friendId)
-            .withCategory(category);
-        
+            .withCategory(category)
+            .withSettled(settledFilter);
+
         // Set comparison period if requested (previous equivalent period)
         if (includeComparison && startDate != null && endDate != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate);
@@ -84,7 +90,7 @@ public class AnalyticsController {
                 startDate.minusDays(1)
             );
         }
-        
+
         TrendData trends = analyticsService.getSpendingTrends(userId, filter);
         return ResponseEntity.ok(trends);
     }
@@ -113,10 +119,20 @@ public class AnalyticsController {
      * Get balance analytics - who owes whom.
      */
     @GetMapping("/balances")
-    public ResponseEntity<BalanceAnalytics> getBalanceAnalytics(Authentication auth) {
+    public ResponseEntity<BalanceAnalytics> getBalanceAnalytics(
+            Authentication auth,
+            @RequestParam(required = false) String groupId,
+            @RequestParam(required = false) String friendId,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String settledFilter) {
         String userId = getUserId(auth);
-        
-        AnalyticsFilter filter = new AnalyticsFilter();
+
+        AnalyticsFilter filter = AnalyticsFilter.builder()
+            .withGroup(groupId)
+            .withFriend(friendId)
+            .withCategory(category)
+            .withSettled(settledFilter);
+
         BalanceAnalytics analytics = analyticsService.getBalanceAnalytics(userId, filter);
         return ResponseEntity.ok(analytics);
     }

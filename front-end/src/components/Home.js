@@ -247,7 +247,8 @@ function Home() {
       const myParticipant = expense.participants?.find(p => p.userId === myUserId);
       if (myParticipant) {
         const net = myParticipant.net || 0;
-        const share = myParticipant.share || 0;
+        // Use share if available, otherwise fall back to owes (backend might use either)
+        const share = myParticipant.share || myParticipant.owes || 0;
         const settledAmount = myParticipant.settledAmount || 0;
         const isFullySettled = myParticipant.fullySettled || false;
 
@@ -304,7 +305,8 @@ function Home() {
     expenses.forEach(exp => {
       const expDate = new Date(exp.date || exp.createdAt);
       const myPart = exp.participants?.find(p => p.userId === myUserId);
-      const myShare = myPart?.share || 0;
+      // Use share if available, otherwise fall back to owes (backend might use either)
+      const myShare = myPart?.share || myPart?.owes || 0;
       
       if (expDate.getMonth() === thisMonth.getMonth() && expDate.getFullYear() === thisMonth.getFullYear()) {
         thisMonthTotal += myShare;
@@ -323,7 +325,7 @@ function Home() {
       // Count as settled if whole expense is settled OR if my part is settled
       const mySettledAmount = myPart?.settledAmount || 0;
       const myFullySettled = myPart?.fullySettled || false;
-      const myRemainingAmount = Math.abs((myPart?.share || 0) - mySettledAmount);
+      const myRemainingAmount = Math.abs((myPart?.share || myPart?.owes || 0) - mySettledAmount);
       const isMyPartSettled = myFullySettled || myRemainingAmount < 0.01;
 
       if (exp.isSettled || isMyPartSettled) settledCount++;
@@ -423,6 +425,32 @@ function Home() {
   // State for balance card scroll position
   const [balanceCardIndex, setBalanceCardIndex] = React.useState(0);
 
+  // Touch swipe handlers for balance cards
+  const balanceSwipeRef = React.useRef({ startX: 0, startY: 0 });
+
+  const handleBalanceTouchStart = (e) => {
+    balanceSwipeRef.current.startX = e.touches[0].clientX;
+    balanceSwipeRef.current.startY = e.touches[0].clientY;
+  };
+
+  const handleBalanceTouchEnd = (e) => {
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const deltaX = endX - balanceSwipeRef.current.startX;
+    const deltaY = endY - balanceSwipeRef.current.startY;
+
+    // Only swipe horizontally if horizontal movement > vertical movement
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+      if (deltaX < 0 && balanceCardIndex < 1) {
+        // Swipe left - go to next card
+        setBalanceCardIndex(1);
+      } else if (deltaX > 0 && balanceCardIndex > 0) {
+        // Swipe right - go to previous card
+        setBalanceCardIndex(0);
+      }
+    }
+  };
+
   return (
     <div className="app-shell">
       <SplitzySocket />
@@ -504,9 +532,13 @@ function Home() {
             
             {/* Horizontal Scrollable Balance Cards */}
             <div className="balance-cards-container">
-              <div className="balance-cards-wrapper">
-                <div 
-                  className="balance-cards-scroll" 
+              <div
+                className="balance-cards-wrapper"
+                onTouchStart={handleBalanceTouchStart}
+                onTouchEnd={handleBalanceTouchEnd}
+              >
+                <div
+                  className="balance-cards-scroll"
                   style={{ transform: `translateX(-${balanceCardIndex * 100}%)` }}
                 >
                 {/* Shared Balance Card */}
@@ -803,7 +835,11 @@ function Home() {
                 <div className="mobile-menu-section">
                   <h3>Your Balance</h3>
                   <div className="balance-cards-container">
-                    <div className="balance-cards-wrapper">
+                    <div
+                      className="balance-cards-wrapper"
+                      onTouchStart={handleBalanceTouchStart}
+                      onTouchEnd={handleBalanceTouchEnd}
+                    >
                       <div
                         className="balance-cards-scroll"
                         style={{ transform: `translateX(-${balanceCardIndex * 100}%)` }}

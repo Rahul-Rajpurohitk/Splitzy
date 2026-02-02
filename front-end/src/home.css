@@ -1886,28 +1886,41 @@ html {
 
   .center-panel {
   background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-  overflow-y: auto;
+  /* Match Spending Insights: flex container that doesn't scroll itself */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* The .p-4 wrapper inside center-panel must also be flex to reach expense-list */
+.center-panel > div,
+.center-panel > .p-4 {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* Critical for nested flex scroll */
+  overflow: hidden;
 }
 
 .expense-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 0;
-  position: sticky;
-  top: 0;
-  background: #0f172a; /* Solid background - no transparency */
-  padding: 16px;
+  gap: 10px;
+  /* NOT sticky - sits at top of flex container like Spending Insights */
+  flex-shrink: 0;
+  /* Exact same background as Spending Insights header */
+  background: rgba(255,255,255,0.02);
+  padding: 12px 16px;
   margin: -16px -16px 0 -16px;
-  z-index: 100;
+  border-radius: 18px 18px 0 0;
+  /* Always show border-bottom divider line */
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
+/* Remove old divider - now using border-bottom on header */
 .expense-header-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0 -16px 12px -16px;
-  opacity: 0.6;
+  display: none;
 }
 .expense-head-left {
   display: flex;
@@ -1945,6 +1958,217 @@ html {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.header-actions .chip {
+  position: relative;
+}
+
+.filter-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #ef4444;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========== EXPENSE FILTER BAR ========== */
+/* Separate box below header - aligned to header's left/right edges */
+.expense-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  /* Negative left/right margins to align with header edges */
+  margin: 0 -16px 16px -16px;
+  /* Same transparent background */
+  background: rgba(255,255,255,0.02);
+  /* Full border on all sides */
+  border: 1px solid rgba(255,255,255,0.06);
+  /* Full rounded corners */
+  border-radius: 12px;
+  /* Don't shrink - stays visible at top */
+  flex-shrink: 0;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.filter-group {
+  position: relative;
+}
+
+.filter-toggle-group {
+  display: flex;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.filter-toggle {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-toggle:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.06);
+}
+
+.filter-toggle.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+/* Dropdown styles */
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-dropdown-btn:hover {
+  border-color: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+.filter-dropdown-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 150px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(30, 41, 59, 0.98);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.filter-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.filter-dropdown-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.filter-dropdown-item.selected {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.filter-dropdown-item.muted {
+  color: var(--muted);
+  cursor: default;
+}
+
+.filter-clear-btn {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.filter-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Category menu styles */
+.filter-dropdown-menu.category-menu {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.filter-dropdown-item .cat-icon {
+  margin-right: 6px;
+  font-size: 0.85rem;
+}
+
+/* Second row of filters */
+.expense-filter-bar .filter-group:nth-child(n+4) {
+  /* Give visual separation for second row */
+}
+
+/* Mobile responsiveness for filters */
+@media (max-width: 600px) {
+  .expense-filter-bar {
+    gap: 8px;
+    /* Align with mobile header edges */
+    margin: 0 -8px 12px -8px;
+    padding: 10px 12px;
+    /* Same transparent background */
+    background: rgba(255,255,255,0.02);
+  }
+
+  .filter-toggle {
+    font-size: 0.7rem;
+    padding: 5px 8px;
+  }
+
+  .filter-dropdown-btn {
+    font-size: 0.7rem;
+    padding: 5px 8px;
+  }
 }
 
 .left-panel,
@@ -2217,11 +2441,16 @@ html {
   flex-direction: column;
   gap: 24px;
   padding-bottom: 48px;
+  margin-top: 16px;
+  /* This is the scrollable container - like .analytics-content in Spending Insights */
+  flex: 1;
+  overflow-y: auto;
 }
 
 .expense-empty {
   text-align: center;
   padding: 48px 24px;
+  margin-top: 16px;
   color: var(--muted);
 }
 .expense-empty .empty-icon {
@@ -3307,6 +3536,26 @@ html {
   position: relative;
   z-index: 2;
   background: var(--card);
+}
+
+/* Settlement success animation */
+.expense-card.settle-success {
+  animation: settle-flash 0.6s ease-out;
+}
+
+@keyframes settle-flash {
+  0% {
+    background: var(--card);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+  30% {
+    background: rgba(34, 197, 94, 0.15);
+    box-shadow: 0 0 20px 5px rgba(34, 197, 94, 0.3);
+  }
+  100% {
+    background: var(--card);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
 }
 
 /* Settled inline badge */
@@ -4721,7 +4970,7 @@ html {
   .panel.center-panel {
     padding-bottom: 20px;
   }
-  
+
   /* Topbar adjustments - fixed and minimal on mobile */
   .topbar {
     position: fixed;
@@ -4868,18 +5117,19 @@ html {
     padding: 8px;
     margin: -8px -8px 0;
     font-size: 0.85rem;
-    background: #0f172a;
+    /* Same transparent background as desktop */
+    background: rgba(255,255,255,0.02);
   }
 
   .expense-header-divider {
-    margin: 0 -8px 8px -8px;
+    margin: 0 -8px 4px -8px;
   }
-  
+
   /* Hide Add expense button on mobile - use bottom nav instead */
   .expense-header .header-actions .chip.primary {
     display: none !important;
   }
-  
+
   /* Optimize expense container spacing */
   .panel.center-panel .p-4 {
     padding: 8px !important;
@@ -4887,8 +5137,9 @@ html {
   
   .expense-list {
     gap: 8px;
+    margin-top: 12px;
   }
-  
+
   .month-section {
     gap: 6px;
   }
@@ -5602,19 +5853,47 @@ html {
     bottom: 0;
     z-index: 9600;
     background: #0a0f1f;
+    /* Account for iOS safe areas */
+    padding-top: env(safe-area-inset-top, 0);
   }
 
-  .mobile-chat-fullscreen .chat-window {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+  .mobile-chat-fullscreen .chat-window,
+  .chat-window.mobile-full-page {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
     width: 100% !important;
     height: 100% !important;
+    max-height: none !important;
+    min-height: auto !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    animation: none !important;
+    background: #0a0f1f !important;
+  }
+
+  .mobile-chat-fullscreen .chat-header,
+  .chat-window.mobile-full-page .chat-header {
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top, 12px));
+    border-radius: 0;
+  }
+
+  .mobile-chat-fullscreen .chat-messages,
+  .chat-window.mobile-full-page .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-chat-fullscreen .chat-input-area,
+  .chat-window.mobile-full-page .chat-input-area {
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    border-radius: 0;
   }
 
   /* Mobile Menu Page View */
@@ -5622,10 +5901,13 @@ html {
     padding: 16px;
     padding-top: max(16px, env(safe-area-inset-top, 16px));
     padding-bottom: 100px;
-    background: #0a0f1f;
+    background: transparent;
     min-height: calc(100vh - 70px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Menu view should flow with main app */
+  .mobile-page-view.menu-view {
+    background: transparent;
   }
 
   .mobile-page-header {
@@ -5639,13 +5921,15 @@ html {
     margin: 0;
   }
 
-  /* Mobile Menu - User Profile Card */
+  /* Mobile Menu - User Profile Card - Match desktop aesthetic */
   .menu-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
     padding: 16px;
     margin-bottom: 16px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .menu-card.user-card {
@@ -5767,19 +6051,19 @@ html {
     color: #38bdf8;
   }
 
-  /* Analytics-style Card Container */
+  /* Analytics-style Card Container - Match desktop panel aesthetic */
   .menu-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
     padding: 16px;
     margin-bottom: 12px;
-    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
-  .menu-card:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.08);
+  .menu-card:active {
+    background: rgba(255, 255, 255, 0.08);
   }
 
   /* Balance Cards - Full Width Single Card Display for Mobile */
@@ -5801,43 +6085,86 @@ html {
   .mobile-page-view .balance-card-slide {
     flex: 0 0 100%;
     min-width: 100%;
-    background: rgba(255, 255, 255, 0.03) !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-radius: 14px;
     padding: 20px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .mobile-page-view .balance-dots {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 16px;
+    padding: 8px 0;
   }
 
-  .mobile-page-view .balance-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    padding: 0;
+  .mobile-page-view .balance-dot,
+  .mobile-page-view button.balance-dot {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    width: 6px !important;
+    height: 6px !important;
+    min-width: 6px !important;
+    min-height: 6px !important;
+    max-width: 6px !important;
+    max-height: 6px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.35) !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none !important;
+    outline: none !important;
   }
 
-  .mobile-page-view .balance-dot.active {
-    background: #38bdf8;
-    width: 20px;
-    border-radius: 4px;
+  .mobile-page-view .balance-dot.active,
+  .mobile-page-view button.balance-dot.active {
+    width: 20px !important;
+    max-width: 20px !important;
+    height: 6px !important;
+    border-radius: 3px !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+  }
+
+  /* Swipe hint indicator */
+  .mobile-page-view .balance-cards-wrapper {
+    position: relative;
+  }
+
+  .mobile-page-view .balance-cards-wrapper::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    border-radius: 2px;
+    opacity: 0.6;
+    animation: swipeHint 2s ease-in-out infinite;
+  }
+
+  @keyframes swipeHint {
+    0%, 100% { transform: translateX(-50%); opacity: 0.4; }
+    50% { transform: translateX(-30%); opacity: 0.7; }
   }
 
   /* Monthly Summary Card */
   .mobile-page-view .monthly-summary-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
     padding: 20px;
     text-align: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .mobile-page-view .monthly-amount {
@@ -5889,15 +6216,16 @@ html {
     justify-content: center;
     gap: 6px;
     padding: 16px 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
-  .mobile-page-view .kpi-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
+  .mobile-page-view .kpi-item:active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
   .mobile-page-view .kpi-emoji {
@@ -5923,11 +6251,13 @@ html {
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
     overflow: hidden;
     padding: 0;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .mobile-page-view .secondary-kpi {
@@ -5965,10 +6295,12 @@ html {
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
     overflow: hidden;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .mobile-page-view .activity-item {
@@ -6044,9 +6376,11 @@ html {
     text-align: center;
     color: rgba(255, 255, 255, 0.4);
     font-size: 0.85rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   /* Mobile overlay active - prevent background scroll */
