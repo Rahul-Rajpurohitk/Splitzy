@@ -613,10 +613,25 @@ public class ExpenseService {
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         List<ExpenseDto> dtos;
 
-        // Start with base query based on friendId or groupId if provided
-        if (friendId != null && !friendId.trim().isEmpty()) {
+        // Start with base query based on friendId and/or groupId if provided
+        // FIXED: Now supports BOTH friend AND group filters together (AND logic)
+        boolean hasFriendFilter = friendId != null && !friendId.trim().isEmpty();
+        boolean hasGroupFilter = groupId != null && !groupId.trim().isEmpty();
+
+        if (hasFriendFilter && hasGroupFilter) {
+            // BOTH friend AND group specified - get expenses involving friend, then filter by group
+            // This gives us expenses that are BOTH with this friend AND in this group
             dtos = expenseDao.findAllByBothUserInvolvement(userId, friendId, sort);
-        } else if (groupId != null && !groupId.trim().isEmpty()) {
+            // Further filter by groupId
+            final String targetGroupId = groupId.trim();
+            dtos = dtos.stream()
+                    .filter(dto -> targetGroupId.equals(dto.getGroupId()))
+                    .collect(Collectors.toList());
+            logger.debug("Applied friend+group filter: friendId={}, groupId={}, count={}",
+                    friendId, groupId, dtos.size());
+        } else if (hasFriendFilter) {
+            dtos = expenseDao.findAllByBothUserInvolvement(userId, friendId, sort);
+        } else if (hasGroupFilter) {
             dtos = expenseDao.findAllByGroupId(groupId, sort);
         } else {
             // Apply basic filter

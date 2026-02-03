@@ -149,29 +149,24 @@ function Home() {
     };
   }, []);
   
-  // Listen for socket events to update recent activity in real-time
-  const lastEvent = useSelector((state) => state.socket.lastEvent);
-  
-  useEffect(() => {
-    if (!lastEvent) return;
-    // Re-fetch expenses when a new expense is created or settled (updates recent activity)
-    if (lastEvent.eventType === 'EXPENSE_EVENT' &&
-        (lastEvent.payload?.type === 'EXPENSE_CREATED' || lastEvent.payload?.type === 'EXPENSE_SETTLED')) {
-      console.log('[Home] Expense event received:', lastEvent.payload?.type, '- refreshing expenses');
-      dispatch(fetchExpensesThunk({ userId: myUserId, token }));
-    }
-  }, [lastEvent, dispatch, myUserId, token]);
-  
-  // RELIABILITY: Background sync every 30 seconds to catch missed socket events
+  // Socket event handling REMOVED from Home.js
+  // REASON: ExpenseCenter.js already listens to socket events and handles refresh
+  // Having both caused duplicate fetches and unnecessary re-renders
+  // ExpenseCenter uses backgroundSyncExpensesThunk which respects filters and only updates if changed
+
+  // RELIABILITY: Background sync every 60 seconds (increased from 30s)
+  // This is a FALLBACK only - primary updates come from socket events handled by ExpenseCenter
   // Uses backgroundSyncExpensesThunk which only updates if data actually changed
-  // This prevents unnecessary re-renders and DOM disruptions
   useEffect(() => {
     if (!myUserId || !token) return;
 
     const syncInterval = setInterval(() => {
-      console.log('[Home] Background sync - checking for updates');
-      dispatch(backgroundSyncExpensesThunk({ userId: myUserId, token }));
-    }, 30000); // 30 seconds
+      // Only sync if document is visible (user is actively using the app)
+      if (document.visibilityState === 'visible') {
+        console.log('[Home] Background sync - checking for updates');
+        dispatch(backgroundSyncExpensesThunk({ userId: myUserId, token }));
+      }
+    }, 60000); // 60 seconds (increased from 30s to reduce unnecessary fetches)
 
     return () => clearInterval(syncInterval);
   }, [myUserId, token, dispatch]);

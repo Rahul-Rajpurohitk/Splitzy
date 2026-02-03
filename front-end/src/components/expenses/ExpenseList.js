@@ -1,36 +1,44 @@
-import React, { useState } from "react";
-import { useSelector } from "react-redux";
+import React, { useState, useMemo, useCallback } from "react";
+import { useSelector, shallowEqual } from "react-redux";
 import MonthSection from "./MonthSection";
 
 function ExpenseList({ myUserId, onOpenChat, filters = {} }) {
   const [expandedExpenseId, setExpandedExpenseId] = useState(null);
-  // Expenses are now filtered by backend, no client-side filtering needed
-  const expenses = useSelector((state) => state.expense.list);
 
-  // Group by Month/Year
-  const groupedExpenses = expenses.reduce((acc, expense) => {
-    if (!expense.date) return acc;
-    const d = new Date(expense.date);
-    const monthName = d.toLocaleString("default", { month: "long" });
-    const year = d.getFullYear();
-    const groupKey = `${monthName.toUpperCase()} ${year}`;
-    if (!acc[groupKey]) acc[groupKey] = [];
-    acc[groupKey].push(expense);
-    return acc;
-  }, {});
+  // Use shallowEqual to prevent re-renders if list reference changes but content is same
+  // This works well with our granular updates that modify array items in place
+  const expenses = useSelector((state) => state.expense.list, shallowEqual);
 
-  // Sort group keys descending (newest first)
-  const sortedGroupKeys = Object.keys(groupedExpenses).sort((a, b) => {
-    const [monthA, yearA] = a.split(" ");
-    const [monthB, yearB] = b.split(" ");
-    const dateA = new Date(`${monthA} 1, ${yearA}`);
-    const dateB = new Date(`${monthB} 1, ${yearB}`);
-    return dateB - dateA;
-  });
+  // Memoize the grouped expenses calculation - only recomputes when expenses change
+  const { groupedExpenses, sortedGroupKeys } = useMemo(() => {
+    // Group by Month/Year
+    const grouped = expenses.reduce((acc, expense) => {
+      if (!expense.date) return acc;
+      const d = new Date(expense.date);
+      const monthName = d.toLocaleString("default", { month: "long" });
+      const year = d.getFullYear();
+      const groupKey = `${monthName.toUpperCase()} ${year}`;
+      if (!acc[groupKey]) acc[groupKey] = [];
+      acc[groupKey].push(expense);
+      return acc;
+    }, {});
 
-  const handleToggleExpand = (expenseId) => {
+    // Sort group keys descending (newest first)
+    const sorted = Object.keys(grouped).sort((a, b) => {
+      const [monthA, yearA] = a.split(" ");
+      const [monthB, yearB] = b.split(" ");
+      const dateA = new Date(`${monthA} 1, ${yearA}`);
+      const dateB = new Date(`${monthB} 1, ${yearB}`);
+      return dateB - dateA;
+    });
+
+    return { groupedExpenses: grouped, sortedGroupKeys: sorted };
+  }, [expenses]);
+
+  // Memoize callback to prevent unnecessary child re-renders
+  const handleToggleExpand = useCallback((expenseId) => {
     setExpandedExpenseId((prev) => (prev === expenseId ? null : expenseId));
-  };
+  }, []);
 
   // Check if any filter is active
   const hasActiveFilters = filters.owingFilter !== 'all' || filters.settledFilter !== 'all' || filters.friendFilter || filters.groupFilter;
@@ -62,4 +70,6 @@ function ExpenseList({ myUserId, onOpenChat, filters = {} }) {
   );
 }
 
-export default ExpenseList;
+// Wrap with React.memo to prevent re-renders when parent re-renders but props unchanged
+// Combined with shallowEqual selector, this significantly reduces unnecessary renders
+export default React.memo(ExpenseList);

@@ -11,6 +11,7 @@ import {
   createExpenseThunk,
   clearExpenseFilter,
   backgroundSyncExpensesThunk,
+  updateSingleExpenseThunk,
 } from "../../features/expense/expenseSlice";
 
 import ExpenseList from "./ExpenseList";
@@ -136,6 +137,7 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
   // 1. Filter bar filters (owingFilter, settledFilter, typeFilter, etc.)
   // 2. Legacy sidebar activeFilter (friend/group context)
   // All filters work together as AND conditions
+  // FIXED: Now supports BOTH friend AND group filters together (AND logic, not mutually exclusive)
   const unifiedFilters = useMemo(() => {
     const filters = {
       owingFilter,
@@ -149,14 +151,19 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
     };
 
     // Merge activeFilter context (sidebar friend/group selection)
-    // This ensures sidebar selection works WITH other filters, not replacing them
+    // FIXED: No longer mutually exclusive - activeFilter can MERGE with existing filters
+    // If user selected friend from sidebar AND group from dropdown, both apply (AND logic)
     if (activeFilter?.filterType === 'friend' && activeFilter.filterEntity?.id) {
-      // If activeFilter is set for friend, use that friend ID
-      // But KEEP all other filters active
-      filters.friendFilter = { id: activeFilter.filterEntity.id, name: activeFilter.filterEntity.name };
-    } else if (activeFilter?.filterType === 'group' && activeFilter.filterEntity?.id) {
-      // If activeFilter is set for group, use that group ID
-      filters.groupFilter = { id: activeFilter.filterEntity.id, groupName: activeFilter.filterEntity.groupName };
+      // Sidebar friend selection - merge with dropdown friend if not already set
+      if (!filters.friendFilter) {
+        filters.friendFilter = { id: activeFilter.filterEntity.id, name: activeFilter.filterEntity.name };
+      }
+    }
+    if (activeFilter?.filterType === 'group' && activeFilter.filterEntity?.id) {
+      // Sidebar group selection - merge with dropdown group if not already set
+      if (!filters.groupFilter) {
+        filters.groupFilter = { id: activeFilter.filterEntity.id, groupName: activeFilter.filterEntity.groupName };
+      }
     }
 
     return filters;
@@ -194,8 +201,9 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
   }, [selectedExpenseId, myUserId, token, dispatch, unifiedFilters]);
 
 
-  // Socket events - use background sync with SAME unified filters
-  // This ensures filtered view is maintained during real-time updates
+  // Socket events - use GRANULAR updates for efficiency
+  // Only updates the specific expense that changed, not the entire list
+  // This prevents cascading re-renders and preserves user's scroll position
   const lastEvent = useSelector((state) => state.socket.lastEvent);
   const lastEventRef = useRef(null);
 
@@ -205,9 +213,21 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
     if (lastEventRef.current === lastEvent.timestamp) return;
     lastEventRef.current = lastEvent.timestamp;
 
-    if (lastEvent.payload?.type === "EXPENSE_CREATED" || lastEvent.payload?.type === "EXPENSE_SETTLED") {
-      console.log('[ExpenseCenter] Socket event:', lastEvent.payload?.type, '- background sync with unified filters');
-      // Background sync uses the SAME unified filters, maintaining current view
+    const eventType = lastEvent.payload?.type;
+    const expenseId = lastEvent.payload?.expenseId;
+
+    if ((eventType === "EXPENSE_CREATED" || eventType === "EXPENSE_SETTLED") && expenseId) {
+      console.log('[ExpenseCenter] Socket event:', eventType, '- granular update for expense:', expenseId);
+      // GRANULAR UPDATE: Only fetch and update the specific expense that changed
+      // This is MUCH more efficient than refetching the entire list
+      dispatch(updateSingleExpenseThunk({
+        expenseId,
+        token,
+        updateType: eventType,
+      }));
+    } else if (eventType === "EXPENSE_CREATED" || eventType === "EXPENSE_SETTLED") {
+      // Fallback: If no expenseId in payload, do background sync
+      console.log('[ExpenseCenter] Socket event without expenseId, falling back to background sync');
       dispatch(backgroundSyncExpensesThunk({ userId: myUserId, token, filters: unifiedFilters }));
     }
   }, [lastEvent, dispatch, myUserId, token, unifiedFilters]);
@@ -292,6 +312,28 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
   // Check if any local filter is active
   const hasActiveLocalFilters = owingFilter !== "all" || settledFilter !== "all" || typeFilter !== "all" ||
     categoryFilter !== "all" || dateRangeFilter !== "all" || friendFilter || groupFilter;
+
+  // Filter validation - detect contradictory or potentially confusing combinations
+  // These combinations may return empty or unexpected results
+  const filterWarning = useMemo(() => {
+    // youOwe + settled = contradictory (you can't owe money that's fully settled)
+    if (owingFilter === 'youOwe' && settledFilter === 'settled') {
+      return "Note: 'You Owe' + 'Settled' may show no results (settled debts aren't owed)";
+    }
+    // othersOwe + partial = semantically odd (partial is YOUR payment status, not theirs)
+    if (owingFilter === 'othersOwe' && settledFilter === 'partial') {
+      return "Note: 'Others Owe' + 'Partial' shows where you partially paid on expenses others owe you";
+    }
+    // personal + friend filter = likely empty (personal expenses have no friends)
+    if (typeFilter === 'personal' && friendFilter) {
+      return "Note: Personal expenses don't involve friends - this combination may show no results";
+    }
+    // personal + group filter = likely empty (personal expenses aren't in groups)
+    if (typeFilter === 'personal' && groupFilter) {
+      return "Note: Personal expenses aren't in groups - this combination may show no results";
+    }
+    return null;
+  }, [owingFilter, settledFilter, typeFilter, friendFilter, groupFilter]);
 
   // Determine title based on activeFilter
   let headerTitle = "Expenses";
@@ -624,6 +666,14 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
               Clear filters
             </button>
           )}
+        </div>
+      )}
+
+      {/* Filter Warning - shows when contradictory filter combinations are selected */}
+      {filterWarning && showFilters && (
+        <div className="filter-warning" data-testid="filter-warning">
+          <span className="warning-icon">⚠️</span>
+          <span className="warning-text">{filterWarning}</span>
         </div>
       )}
 

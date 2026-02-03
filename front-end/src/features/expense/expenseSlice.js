@@ -127,7 +127,35 @@ export const fetchExpensesForGroupThunk = createAsyncThunk(
   }
 );
 
-// 6) Background sync thunk - silently updates without triggering loading state
+// 6) Granular update thunk - fetches single expense and updates it in place
+// MUCH more efficient than refetching entire list - avoids cascading re-renders
+// Used for socket events when we know which specific expense changed
+export const updateSingleExpenseThunk = createAsyncThunk(
+  "expense/updateSingle",
+  async ({ expenseId, token, updateType }, thunkAPI) => {
+    try {
+      if (!expenseId) throw new Error("No expenseId provided");
+
+      const res = await axios.get(
+        `${process.env.REACT_APP_API_URL}/home/expenses/${expenseId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      return {
+        expense: res.data,
+        updateType, // "EXPENSE_CREATED" | "EXPENSE_SETTLED" | "EXPENSE_DELETED"
+      };
+    } catch (err) {
+      // If expense not found (404), it might have been deleted
+      if (err.response?.status === 404) {
+        return { expense: null, expenseId, updateType: "EXPENSE_DELETED" };
+      }
+      return thunkAPI.rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// 7) Background sync thunk - silently updates without triggering loading state
 // Only updates Redux state if data actually changed (compares by JSON stringification)
 // Supports filters to maintain current filtered view
 export const backgroundSyncExpensesThunk = createAsyncThunk(
@@ -305,6 +333,44 @@ const expenseSlice = createSlice({
       .addCase(fetchExpensesForGroupThunk.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload || "Failed to fetch group expenses";
+      });
+
+    // Granular single expense update - much more efficient than full list replacement
+    builder
+      .addCase(updateSingleExpenseThunk.pending, (state) => {
+        // Do NOT set loading state - this is a silent update
+      })
+      .addCase(updateSingleExpenseThunk.fulfilled, (state, action) => {
+        const { expense, updateType, expenseId } = action.payload;
+
+        if (updateType === "EXPENSE_DELETED" || !expense) {
+          // Remove from list if deleted
+          const deleteId = expenseId || expense?.id;
+          if (deleteId) {
+            state.list = state.list.filter(e => e.id !== deleteId);
+            console.log('[GranularUpdate] Expense removed from list:', deleteId);
+          }
+          return;
+        }
+
+        // Check if expense already exists in list
+        const existingIndex = state.list.findIndex(e => e.id === expense.id);
+
+        if (existingIndex >= 0) {
+          // UPDATE in place - preserves array reference for unchanged items
+          // This is much more efficient than replacing entire array
+          state.list[existingIndex] = expense;
+          console.log('[GranularUpdate] Expense updated in place:', expense.id);
+        } else if (updateType === "EXPENSE_CREATED") {
+          // ADD new expense to beginning of list
+          state.list.unshift(expense);
+          console.log('[GranularUpdate] New expense added to list:', expense.id);
+        }
+        // For EXPENSE_SETTLED on non-existent expense, just ignore (may not match current filters)
+      })
+      .addCase(updateSingleExpenseThunk.rejected, (state, action) => {
+        // Silently ignore errors for granular updates
+        console.warn('[GranularUpdate] Silently ignoring error:', action.payload);
       });
 
     // Background sync - only updates if data changed, no loading state

@@ -2133,6 +2133,30 @@ html {
   border-color: rgba(239, 68, 68, 0.5);
 }
 
+/* Filter warning for contradictory combinations */
+.filter-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 -16px 12px -16px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: #fbbf24;
+}
+
+.filter-warning .warning-icon {
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.filter-warning .warning-text {
+  color: rgba(251, 191, 36, 0.9);
+  line-height: 1.4;
+}
+
 /* Category menu styles */
 .filter-dropdown-menu.category-menu {
   max-height: 280px;
