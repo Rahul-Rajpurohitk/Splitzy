@@ -358,7 +358,7 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {/* Filter Bar - toggle via filter icon in header */}
       {showFilters && (
         <div className="expense-filter-bar" data-testid="expense-filter-bar">
           {/* Owing Filter Toggles */}

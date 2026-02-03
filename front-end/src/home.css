@@ -2149,8 +2149,8 @@ html {
   /* Give visual separation for second row */
 }
 
-/* Mobile responsiveness for filters */
-@media (max-width: 600px) {
+/* Mobile responsiveness for filters - use 768px to match mobile nav breakpoint */
+@media (max-width: 768px) {
   .expense-filter-bar {
     gap: 8px;
     /* Align with mobile header edges */
@@ -4971,6 +4971,20 @@ html {
     padding-bottom: 20px;
   }
 
+  /* IMPORTANT: Allow scrolling for mobile page views (menu, people, profile) */
+  /* Override the overflow:hidden that's set for expense list flex layout */
+  .panel.center-panel:has(.mobile-page-view) {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fallback for browsers without :has() support */
+  .mobile-page-view {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    min-height: 100%;
+  }
+
   /* Topbar adjustments - fixed and minimal on mobile */
   .topbar {
     position: fixed;
@@ -5126,8 +5140,27 @@ html {
   }
 
   /* Hide Add expense button on mobile - use bottom nav instead */
-  .expense-header .header-actions .chip.primary {
+  /* But keep the filter toggle button visible */
+  .expense-header .header-actions .chip.primary:not([data-testid="filter-toggle-btn"]) {
     display: none !important;
+  }
+
+  /* Ensure filter toggle is always visible on mobile */
+  .expense-header .header-actions [data-testid="filter-toggle-btn"] {
+    display: flex !important;
+    padding: 8px;
+    min-width: 36px;
+    min-height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .expense-header .header-actions [data-testid="filter-toggle-btn"].primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: none;
   }
 
   /* Optimize expense container spacing */

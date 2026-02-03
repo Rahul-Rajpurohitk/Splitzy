@@ -2679,3 +2679,146 @@
   background: rgba(74, 222, 128, 0.2);
   color: #4ade80;
 }
+
+/* ========== MOBILE DATE RANGE TOGGLE ========== */
+/* Mobile-only elements hidden by default */
+.mobile-only {
+  display: none !important;
+}
+
+/* Mobile date toggle button */
+.mobile-date-toggle {
+  display: none;
+}
+
+/* Date range close button inside selector */
+.date-range-close-btn {
+  display: none;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  /* Show mobile-only elements */
+  .analytics-header .mobile-only {
+    display: flex !important;
+  }
+
+  /* Hide date range selector by default on mobile */
+  .date-range-selector {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+  }
+
+  /* Show date range when toggled on mobile */
+  .date-range-selector.mobile-visible {
+    display: flex;
+  }
+
+  /* Date range buttons in mobile dropdown */
+  .date-range-selector .range-btn {
+    width: 100%;
+    text-align: center;
+    padding: 10px 16px;
+  }
+
+  /* Mobile date range close button */
+  .date-range-selector .date-range-close-btn.mobile-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    font-size: 0.75rem;
+    gap: 4px;
+  }
+
+  .date-range-selector .date-range-close-btn.mobile-only:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
+
+  /* Mobile date toggle button */
+  .mobile-date-toggle.mobile-only {
+    display: flex !important;
+    position: relative;
+  }
+
+  .mobile-date-toggle.active {
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    color: #0b132b;
+    border-color: transparent;
+  }
+
+  /* Analytics header needs relative positioning for dropdown */
+  .analytics-header {
+    position: relative;
+  }
+
+  .analytics-controls {
+    position: relative;
+  }
+
+  /* Ensure all icon buttons have visible borders on mobile */
+  .analytics-controls .icon-btn {
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .analytics-controls .icon-btn.active {
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    border-color: transparent !important;
+  }
+
+  /* Compact header title on mobile */
+  .analytics-title h2 {
+    font-size: 0.95rem;
+  }
+
+  /* Inline filters panel mobile adjustments */
+  .inline-filters {
+    margin: 0 -8px 12px -8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .inline-filters .filter-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .inline-filters .filter-item {
+    width: 100%;
+  }
+
+  .inline-filters .filter-select {
+    width: 100%;
+  }
+
+  .inline-filters .filter-chips {
+    flex-wrap: wrap;
+  }
+
+  .inline-filters .clear-filters-btn {
+    width: 100%;
+    justify-content: center;
+    margin-top: 8px;
+  }
+}

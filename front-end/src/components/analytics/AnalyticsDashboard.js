@@ -432,6 +432,7 @@ function AnalyticsDashboard() {
   
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
+  const [showMobileDateRange, setShowMobileDateRange] = useState(false); // Mobile date range toggle
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // all, settled, unsettled
   const [activeKPI, setActiveKPI] = useState(null); // For clickable KPIs
@@ -1106,21 +1107,42 @@ function AnalyticsDashboard() {
           <FiActivity size={18} />
           <h2>Spending Insights</h2>
         </div>
-        
+
         <div className="analytics-controls">
-          <div className="date-range-selector">
+          {/* Date range selector - hidden on mobile by default, shown when toggled */}
+          <div className={`date-range-selector ${showMobileDateRange ? 'mobile-visible' : ''}`}>
             {['week', 'month', 'quarter', 'year'].map(range => (
               <button
                 key={range}
                 className={`range-btn ${dateRange === range ? 'active' : ''}`}
-                onClick={() => setDateRange(range)}
+                onClick={() => {
+                  setDateRange(range);
+                  setShowMobileDateRange(false); // Close on mobile after selection
+                }}
               >
                 {range.charAt(0).toUpperCase() + range.slice(1)}
               </button>
             ))}
+            {/* Close button for mobile date range */}
+            <button
+              className="date-range-close-btn mobile-only"
+              onClick={() => setShowMobileDateRange(false)}
+              aria-label="Close date range"
+            >
+              <FiX size={14} />
+            </button>
           </div>
-          
-          <button 
+
+          {/* Mobile date range toggle button */}
+          <button
+            className={`icon-btn mobile-date-toggle mobile-only ${showMobileDateRange ? 'active' : ''}`}
+            onClick={() => setShowMobileDateRange(!showMobileDateRange)}
+            title="Select Date Range"
+          >
+            <FiCalendar size={14} />
+          </button>
+
+          <button
             className={`icon-btn filter-toggle ${showFilters ? 'active' : ''} ${hasActiveFilters ? 'has-filters' : ''}`}
             onClick={() => setShowFilters(!showFilters)}
             title="Toggle Filters"
@@ -1128,7 +1150,7 @@ function AnalyticsDashboard() {
             <FiFilter size={14} />
             {hasActiveFilters && <span className="filter-badge"></span>}
           </button>
-          
+
           <button
             className={`icon-btn ${isBackgroundRefreshing ? 'refreshing' : ''}`}
             onClick={() => fetchAnalytics(true, true)}
