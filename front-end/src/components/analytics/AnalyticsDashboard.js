@@ -53,7 +53,7 @@ const Tooltip = ({ children, content, position = 'top' }) => {
 const INSIGHT_TOOLTIPS = {
   velocity: "Compares your spending in the current period vs the previous equivalent period. A positive value means you're spending more.",
   daily: "Your average daily spending based on your expenses in the selected time range.",
-  forecast: `Projected total for this period. Calculated using your average spending per active day (${new Date().getDate()} days so far), projecting remaining days at 70% activity rate.`,
+  forecast: "Projected total for this period. Uses your actual spending pattern and activity rate to estimate remaining spending.",
   settlement: "Percentage of expenses that have been fully settled. Click to filter and see pending expenses.",
   category: "Breakdown of your spending by category. Click a category to filter all data by it.",
   trend: "Visual representation of your spending over time. Higher peaks indicate higher spending days.",
@@ -812,47 +812,96 @@ function AnalyticsDashboard() {
     };
   }, [expenses, myUserId, dateRange]);
 
-  // Calculate forecast (projected spending) - uses filtered expenses for accuracy
+  // Calculate forecast (projected spending) - date range aware with dynamic activity rate
   const spendingForecast = useMemo(() => {
     const now = new Date();
-    const dayOfMonth = now.getDate();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const daysRemaining = daysInMonth - dayOfMonth;
-    
-    // Use filtered expenses for the current period
+
+    // Determine period boundaries based on dateRange
+    let periodStart = new Date();
+    let periodEnd = new Date();
+    let totalPeriodDays = 30; // default
+
+    switch (dateRange) {
+      case 'week':
+        periodStart.setDate(now.getDate() - 7);
+        periodEnd = new Date(periodStart);
+        periodEnd.setDate(periodStart.getDate() + 7);
+        totalPeriodDays = 7;
+        break;
+      case 'month':
+        // Use current calendar month for projection
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        totalPeriodDays = periodEnd.getDate();
+        break;
+      case 'quarter':
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        periodStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+        periodEnd = new Date(now.getFullYear(), currentQuarter * 3 + 3, 0);
+        totalPeriodDays = Math.round((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
+        break;
+      case 'year':
+        periodStart = new Date(now.getFullYear(), 0, 1);
+        periodEnd = new Date(now.getFullYear(), 11, 31);
+        totalPeriodDays = 365;
+        break;
+      default:
+        // Default to current month
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        totalPeriodDays = periodEnd.getDate();
+    }
+
+    // Calculate elapsed days in period
+    const elapsedMs = now - periodStart;
+    const elapsedDays = Math.max(1, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
+    const daysRemaining = Math.max(0, totalPeriodDays - elapsedDays);
+
+    // Use filtered expenses (respects activeKPI filter like 'personal')
     const periodExpenses = filteredExpenses.length > 0 ? filteredExpenses : expenses;
-    
-    // Calculate spending within the date range
+
+    // Calculate spending and track active days within the period
     let periodSpend = 0;
     let spendingDays = new Set();
-    
+
     periodExpenses.forEach(exp => {
       const date = parseDateLocal(exp.date || exp.createdAt);
-      const myPart = exp.participants?.find(p => p.userId === myUserId);
-      if (myPart) {
-        periodSpend += myPart.share || 0;
-        spendingDays.add(date.toDateString());
+      // Only count expenses within the current projection period
+      if (date >= periodStart && date <= now) {
+        const myPart = exp.participants?.find(p => p.userId === myUserId);
+        if (myPart) {
+          periodSpend += myPart.share || 0;
+          spendingDays.add(date.toDateString());
+        }
       }
     });
-    
-    // Calculate projection based on actual spending days, not calendar days
-    const activeDays = spendingDays.size || 1;
-    const avgPerActiveDay = periodSpend / activeDays;
-    
-    // Project remaining spending based on expected active days
-    // Assume ~70% of remaining days will have spending activity
-    const expectedActiveDaysRemaining = Math.ceil(daysRemaining * 0.7);
+
+    // Calculate actual activity rate from data
+    const activeDays = spendingDays.size || 0;
+    const activityRate = elapsedDays > 0 ? activeDays / elapsedDays : 0;
+
+    // If no active days yet, use a conservative activity rate
+    const effectiveActivityRate = activeDays > 0 ? activityRate : 0.5;
+
+    // Calculate average spending per active day
+    const avgPerActiveDay = activeDays > 0 ? periodSpend / activeDays : 0;
+
+    // Project remaining spending using actual activity rate
+    const expectedActiveDaysRemaining = Math.ceil(daysRemaining * effectiveActivityRate);
     const projectedRemaining = avgPerActiveDay * expectedActiveDaysRemaining;
     const projected = periodSpend + projectedRemaining;
-    
+
     return {
       currentSpend: periodSpend,
       dailyAvg: avgPerActiveDay,
       projected: projected,
       daysRemaining,
-      activeDays
+      activeDays,
+      elapsedDays,
+      totalPeriodDays,
+      activityRate: Math.round(effectiveActivityRate * 100)
     };
-  }, [filteredExpenses, expenses, myUserId]);
+  }, [filteredExpenses, expenses, myUserId, dateRange]);
 
   // Settlement score (percentage of settled expenses)
   const settlementScore = useMemo(() => {
@@ -1073,6 +1122,19 @@ function AnalyticsDashboard() {
     return parts.join(' • ');
   }, [filterCategory, filterStatus, filterFriend, filterGroup, activeKPI, friends, groups]);
 
+  // Calculate local total spent from filteredExpenses when local filters (activeKPI) are active
+  // This ensures KPI filters like "personal" properly affect the Total Spent display
+  const localTotalSpent = useMemo(() => {
+    let total = 0;
+    filteredExpenses.forEach(exp => {
+      const myPart = exp.participants?.find(p => p.userId === myUserId);
+      if (myPart) {
+        total += myPart.share || 0;
+      }
+    });
+    return total;
+  }, [filteredExpenses, myUserId]);
+
   if (loading) {
     return (
       <div className="analytics-loading">
@@ -1098,6 +1160,9 @@ function AnalyticsDashboard() {
   const friendBalances = balances?.friendBalances || [];
   const trendPoints = trends?.dataPoints || [];
   const trendSummary = trends?.summary;
+
+  // Use local calculation when activeKPI is set, otherwise use API data
+  const displayTotalSpent = activeKPI ? localTotalSpent : (spending?.totalSpent || localTotalSpent);
   
   return (
     <div className="analytics-dashboard">
@@ -1257,7 +1322,7 @@ function AnalyticsDashboard() {
               <div className="hero-kpi total">
                 <span className="hero-emoji">💰</span>
                 <div className="hero-kpi-content">
-                  <span className="hero-kpi-value">{formatCurrency(spending?.totalSpent || 0)}</span>
+                  <span className="hero-kpi-value">{formatCurrency(displayTotalSpent)}</span>
                   <span className="hero-kpi-label">Total Spent</span>
                 </div>
               </div>

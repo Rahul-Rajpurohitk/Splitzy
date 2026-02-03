@@ -11,8 +11,8 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ========== TOOLTIP STYLES ========== */
@@ -106,8 +106,11 @@
   background: rgba(255,255,255,0.02);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
-  margin: -16px -16px 0;
+  margin: -16px -16px 0 -16px;
   border-radius: 18px 18px 0 0;
+  overflow: hidden; /* Contain overflowing elements */
+  position: relative;
+  z-index: 10; /* Above content for dropdown positioning */
 }
 
 .analytics-title {
@@ -223,6 +226,8 @@
   padding: 12px 16px;
   margin-bottom: 16px;
   animation: slideDown 0.2s ease-out;
+  position: relative;
+  z-index: 5; /* Below header but above content */
 }
 
 @keyframes slideDown {
@@ -393,6 +398,8 @@
   flex: 1;
   overflow-y: auto;
   padding: 16px 0;
+  position: relative;
+  z-index: 1; /* Below header (z-index: 10) and dropdown (z-index: 9999) */
 }
 
 .analytics-content::-webkit-scrollbar {
@@ -2698,27 +2705,94 @@
 
 /* Mobile responsive styles */
 @media (max-width: 768px) {
+  /* ===== HEADER FIXES ===== */
+  /* Analytics header - extend to panel edges to inherit panel's border-radius */
+  /* Panel padding on mobile is 8px, so use -8px margin to extend to edges */
+  .analytics-header {
+    position: relative;
+    padding: 12px 8px;
+    margin: -8px -8px 0 -8px;
+    border-radius: 0; /* Let parent panel's border-radius clip this */
+    z-index: 20;
+    min-height: 48px;
+  }
+
+  /* Analytics controls container */
+  .analytics-controls {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Icon buttons - smaller on mobile to fit in header */
+  .analytics-controls .icon-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    background: rgba(255,255,255,0.06);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .analytics-controls .icon-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  .analytics-controls .icon-btn.active {
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    border-color: transparent !important;
+    color: #0b132b;
+  }
+
+  /* Compact header title on mobile */
+  .analytics-title {
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .analytics-title svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .analytics-title h2 {
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   /* Show mobile-only elements */
   .analytics-header .mobile-only {
     display: flex !important;
   }
 
   /* Hide date range selector by default on mobile */
+  /* Use position: fixed to escape parent overflow: hidden */
   .date-range-selector {
     display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 8px;
-    background: rgba(15, 23, 42, 0.98);
-    border: 1px solid rgba(255,255,255,0.1);
+    position: fixed;
+    top: calc(56px + env(safe-area-inset-top, 0px) + 60px); /* Below topbar + header */
+    right: 16px;
+    background: #0f172a; /* Solid dark background - no transparency */
+    border: 1px solid rgba(255,255,255,0.15);
     border-radius: 12px;
     padding: 8px;
-    z-index: 100;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 9999;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.6);
     flex-direction: column;
     gap: 4px;
-    min-width: 120px;
+    min-width: 130px;
   }
 
   /* Show date range when toggled on mobile */
@@ -2764,39 +2838,27 @@
   .mobile-date-toggle.active {
     background: linear-gradient(135deg, #38bdf8, #22d3ee);
     color: #0b132b;
-    border-color: transparent;
-  }
-
-  /* Analytics header needs relative positioning for dropdown */
-  .analytics-header {
-    position: relative;
-  }
-
-  .analytics-controls {
-    position: relative;
-  }
-
-  /* Ensure all icon buttons have visible borders on mobile */
-  .analytics-controls .icon-btn {
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    background: rgba(255,255,255,0.06);
-  }
-
-  .analytics-controls .icon-btn.active {
-    background: linear-gradient(135deg, #38bdf8, #22d3ee);
     border-color: transparent !important;
   }
 
-  /* Compact header title on mobile */
-  .analytics-title h2 {
-    font-size: 0.95rem;
-  }
-
-  /* Inline filters panel mobile adjustments */
+  /* ===== INLINE FILTERS FIXES ===== */
+  /* Match expense-filter-bar: no top margin to sit directly below header */
   .inline-filters {
     margin: 0 -8px 12px -8px;
-    padding: 10px 12px;
+    padding: 10px 8px;
     border-radius: 10px;
+    z-index: 5; /* Below header z-index: 20 */
+    position: relative;
+  }
+
+  /* Hide filter count badge on mobile - causing layout issues */
+  .active-filter-tag .filter-count {
+    display: none;
+  }
+
+  /* Hide donut sublabel on mobile */
+  .donut-sublabel {
+    display: none;
   }
 
   .inline-filters .filter-row {
@@ -2820,5 +2882,31 @@
     width: 100%;
     justify-content: center;
     margin-top: 8px;
+  }
+
+  /* ===== CONTENT AREA ===== */
+  .analytics-content {
+    padding: 12px 0;
+  }
+
+  /* ===== KPI CLICKABLE FEEDBACK ===== */
+  .hero-kpi.settlement,
+  .type-row,
+  .strip-kpi.clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .hero-kpi.settlement:active,
+  .type-row:active,
+  .strip-kpi.clickable:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+
+  /* Personal vs Shared card - larger tap targets */
+  .type-row {
+    min-height: 44px;
+    padding: 10px 12px !important;
   }
 }

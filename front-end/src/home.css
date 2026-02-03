@@ -4969,6 +4969,9 @@ html {
   
   .panel.center-panel {
     padding-bottom: 20px;
+    /* Disable backdrop-filter to allow position:fixed dropdowns to escape */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
   /* IMPORTANT: Allow scrolling for mobile page views (menu, people, profile) */
