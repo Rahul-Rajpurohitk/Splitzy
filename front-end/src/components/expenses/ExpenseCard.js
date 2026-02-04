@@ -302,14 +302,35 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
   const myRemainingAmount = Math.abs((myParticipant.share || 0) - (myParticipant.settledAmount || 0));
   const isMyPartSettled = myParticipant.fullySettled || myRemainingAmount < 0.01;
 
+  // SETTLEMENT LOGIC FIX:
+  // - Debtors (myNet < 0): They OWE money, need to "Mark as Paid"
+  // - Lenders (myNet > 0): They're OWED money, they "Record Payments" received
+  // - Balanced (myNet == 0): No action needed
+  const isDebtor = myNet < -0.01; // I owe money
+  const isLender = myNet > 0.01;  // Others owe me money
+
+  // Check if all debtors in this expense have settled (for lenders to auto-settle)
+  const allDebtorsSettled = expense.participants?.every(p => {
+    const pNet = (p.paid || 0) - (p.share || 0);
+    if (pNet < -0.01) {
+      // This participant is a debtor
+      return p.fullySettled || false;
+    }
+    return true; // Not a debtor, doesn't need to settle
+  }) ?? true;
+
+  // For lenders: they're "settled" when all debtors have settled
+  // (they've received all their money, nothing more to do)
+  const isLenderEffectivelySettled = isLender && allDebtorsSettled;
+
   // Determine net status
   let netStatus = "settled";
   let netAmount = 0;
   let netLabel = "Settled";
   let netColor = "var(--muted)";
 
-  // If my part is settled, always show as settled regardless of original net
-  if (isMyPartSettled) {
+  // If my part is settled OR I'm a lender and all debtors settled, show as settled
+  if (isMyPartSettled || isLenderEffectivelySettled) {
     netStatus = "settled";
     netAmount = 0;
     netLabel = "Settled";
@@ -351,7 +372,8 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
       {/* Swipe action buttons (revealed on swipe left) */}
       {swipeOffset > 0 && (
       <div className="swipe-actions">
-        {!expense.isSettled && myNet !== 0 && !isMyPartSettled && (
+        {/* DEBTORS: Show "Settle" button - they owe money and need to mark as paid */}
+        {!expense.isSettled && isDebtor && !isMyPartSettled && (
           <button
             className="swipe-action-btn settle"
             onClick={(e) => { e.stopPropagation(); closeSwipe(); handleSettleFull(e); }}
@@ -360,7 +382,17 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
             <span>Settle</span>
           </button>
         )}
-        <button 
+        {/* LENDERS: Show "Record" button - they can record payments received from debtors */}
+        {!expense.isSettled && isLender && !allDebtorsSettled && (
+          <button
+            className="swipe-action-btn settle"
+            onClick={(e) => { e.stopPropagation(); closeSwipe(); handleSettleFull(e); }}
+          >
+            <FiCheckCircle size={18} />
+            <span>Record</span>
+          </button>
+        )}
+        <button
           className="swipe-action-btn delete"
           onClick={(e) => { e.stopPropagation(); closeSwipe(); handleDelete(e); }}
         >
@@ -499,7 +531,16 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
               const pNet = (p.paid || 0) - (p.share || 0);
               const isMe = p.userId === myUserId;
               const settledAmt = p.settledAmount || 0;
-              const isFullySettled = p.fullySettled || Math.abs(pNet) < 0.01;
+              const pIsDebtor = pNet < -0.01;
+              const pIsLender = pNet > 0.01;
+
+              // SETTLEMENT STATUS:
+              // - Debtors: settled when fullySettled flag is true
+              // - Lenders: settled when ALL debtors have settled (they've received all money)
+              // - Balanced (net ~= 0): always settled
+              const isFullySettled = p.fullySettled ||
+                Math.abs(pNet) < 0.01 ||
+                (pIsLender && allDebtorsSettled); // Lenders auto-settle when all debtors paid
 
               // Calculate remaining balance after partial settlements
               let remainingBalance;
@@ -546,7 +587,8 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
 
           {/* Actions - Desktop only (mobile uses dropdown menu) */}
           <div className="expense-actions desktop-only">
-            {!expense.isSettled && myNet !== 0 && !isMyPartSettled && (
+            {/* DEBTORS: Show "Mark as Paid" - they owe money */}
+            {!expense.isSettled && isDebtor && !isMyPartSettled && (
               <button
                 className="expense-action-btn settle"
                 onClick={handleSettleFull}
@@ -556,13 +598,25 @@ function ExpenseCard({ expenseId, isExpanded, onToggleExpand, myUserId, onOpenCh
                 {isSettling ? 'Settling...' : 'Mark as Paid'}
               </button>
             )}
-            {(expense.isSettled || isMyPartSettled) && (
+            {/* LENDERS: Show "Record Payments" - they can record payments received */}
+            {!expense.isSettled && isLender && !allDebtorsSettled && (
+              <button
+                className="expense-action-btn settle"
+                onClick={handleSettleFull}
+                disabled={isSettling}
+              >
+                <FiCheckCircle size={14} />
+                {isSettling ? 'Recording...' : 'Record Payments'}
+              </button>
+            )}
+            {/* Show "Settled" for: settled expenses, settled debtors, or lenders when all debtors paid */}
+            {(expense.isSettled || isMyPartSettled || isLenderEffectivelySettled) && (
               <button className="expense-action-btn settled" disabled>
                 <FiCheckCircle size={14} />
                 Settled
               </button>
             )}
-            <button 
+            <button
               className="expense-action-btn delete"
               onClick={handleDelete}
               disabled={isDeleting}

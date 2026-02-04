@@ -832,68 +832,99 @@ public class ExpenseService {
 
     /**
      * Settle an expense for a specific participant (full or partial).
+     *
+     * SETTLEMENT LOGIC:
+     * - Only DEBTORS (net < 0, they owe money) need to manually settle
+     * - LENDERS (net > 0, they're owed money) don't need to settle - they're receiving money
+     * - When ALL debtors have settled, the expense is fully settled
+     * - At that point, lenders are AUTO-MARKED as settled too
      */
     public Expense settleExpense(String expenseId, SettleExpenseRequest request) {
         logger.info("settleExpense called for expenseId={}, participantUserId={}", expenseId, request.getParticipantUserId());
-        
+
         ExpenseDto expense = expenseDao.findById(expenseId)
                 .orElseThrow(() -> new RuntimeException("Expense not found: " + expenseId));
-        
+
         // Find the participant and update their settled amount
         for (ExpenseDto.ParticipantDto participant : expense.getParticipants()) {
             if (participant.getUserId().equals(request.getParticipantUserId())) {
                 double amountOwed = Math.abs(participant.getNet());
                 double currentSettled = participant.getSettledAmount();
-                
+
                 double settleAmount;
                 if (request.isSettleFullAmount()) {
                     settleAmount = amountOwed - currentSettled;
                 } else {
                     settleAmount = Math.min(request.getSettleAmount(), amountOwed - currentSettled);
                 }
-                
+
                 participant.setSettledAmount(currentSettled + settleAmount);
-                
+
                 // Check if fully settled
                 if (Math.abs(participant.getSettledAmount() - amountOwed) < 0.01) {
                     participant.setFullySettled(true);
                 }
-                
-                logger.info("Participant {} settled ${} (total settled: ${})", 
+
+                logger.info("Participant {} settled ${} (total settled: ${})",
                     request.getParticipantUserId(), settleAmount, participant.getSettledAmount());
                 break;
             }
         }
-        
-        // Check if all participants are fully settled
-        boolean allSettled = expense.getParticipants().stream()
-                .allMatch(p -> p.isFullySettled() || Math.abs(p.getNet()) < 0.01);
-        expense.setSettled(allSettled);
-        
+
+        // FIXED: Check if all DEBTORS (net < 0) are fully settled
+        // Lenders (net > 0) don't need to settle - they're the ones receiving money
+        // Participants with net == 0 (paid exactly their share) are already balanced
+        boolean allDebtorsSettled = expense.getParticipants().stream()
+                .filter(p -> p.getNet() < -0.01) // Only check debtors (negative net = they owe)
+                .allMatch(p -> p.isFullySettled());
+
+        // Also check if there are any debtors at all (edge case: everyone paid their share)
+        boolean hasDebtors = expense.getParticipants().stream()
+                .anyMatch(p -> p.getNet() < -0.01);
+
+        boolean expenseFullySettled = !hasDebtors || allDebtorsSettled;
+
+        // If all debtors settled, AUTO-MARK lenders as settled too
+        if (expenseFullySettled) {
+            logger.info("All debtors settled for expense {}, auto-settling lenders", expenseId);
+            for (ExpenseDto.ParticipantDto participant : expense.getParticipants()) {
+                if (participant.getNet() > 0.01 && !participant.isFullySettled()) {
+                    // Lender: mark as settled (they've received all their money)
+                    participant.setSettledAmount(Math.abs(participant.getNet()));
+                    participant.setFullySettled(true);
+                    logger.info("Auto-settled lender {} for expense {}", participant.getUserId(), expenseId);
+                }
+            }
+        }
+
+        expense.setSettled(expenseFullySettled);
         expense.setUpdatedAt(LocalDateTime.now());
         ExpenseDto savedDto = expenseDao.save(expense);
 
         Expense saved = toExpense(savedDto);
 
         // Send socket event for expense settlement
-        sendExpenseSettledEvent(saved, request.getParticipantUserId());
+        // Include flag if expense is now FULLY settled (for notification purposes)
+        sendExpenseSettledEvent(saved, request.getParticipantUserId(), expenseFullySettled);
 
         return saved;
     }
 
     /**
      * Send socket event when expense is settled.
+     * If expenseFullySettled is true, also sends notifications to all participants.
      */
-    private void sendExpenseSettledEvent(Expense expense, String settledByUserId) {
+    private void sendExpenseSettledEvent(Expense expense, String settledByUserId, boolean expenseFullySettled) {
         try {
             ExpenseEventData data = new ExpenseEventData();
-            data.setType("EXPENSE_SETTLED");
+            data.setType(expenseFullySettled ? "EXPENSE_FULLY_SETTLED" : "EXPENSE_SETTLED");
             data.setExpenseId(expense.getId());
             data.setCreatorId(settledByUserId);
 
             UserDto settledByUser = userDao.findById(settledByUserId).orElse(null);
+            String settledByName = settledByUser != null ? settledByUser.getName() : "Someone";
             if (settledByUser != null) {
-                data.setCreatorName(settledByUser.getName());
+                data.setCreatorName(settledByName);
             }
 
             Set<String> targetEmails = new HashSet<>();
@@ -907,13 +938,32 @@ public class ExpenseService {
                         targetEmails.add(email);
                         socketIOServer.getRoomOperations(email)
                                 .sendEvent("expenseEvent", data);
-                        logger.info("[ExpenseService] Socket.IO event [EXPENSE_SETTLED] sent to room: {}", email);
+                        logger.info("[ExpenseService] Socket.IO event [{}] sent to room: {}",
+                                data.getType(), email);
                     }
                 }
             }
 
             // Also publish to SQS for guaranteed delivery
             sqsEventPublisher.publishExpenseEvent(targetEmails, data);
+
+            // If expense is FULLY settled, create notifications for all participants
+            if (expenseFullySettled) {
+                logger.info("Expense {} is fully settled, sending notifications to all participants", expense.getId());
+                for (Participant p : expense.getParticipants()) {
+                    // Don't notify the person who just settled (they know they did it)
+                    if (!p.getUserId().equals(settledByUserId)) {
+                        notificationService.createNotification(
+                                p.getUserId(),
+                                "Expense '" + expense.getDescription() + "' has been fully settled!",
+                                expense.getId(),
+                                settledByName,
+                                settledByUserId,
+                                "EXPENSE_SETTLED"
+                        );
+                    }
+                }
+            }
 
         } catch (Exception e) {
             logger.error("[ExpenseService] Error sending expense settled event: {}", e.getMessage(), e);

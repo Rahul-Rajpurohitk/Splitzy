@@ -26,16 +26,21 @@ function SplitzySocket() {
       // We store it in lastEvent with a custom shape
       dispatch(setLastEvent({
         eventType: "FRIEND_REQUEST",
-        payload: data
+        payload: data,
+        timestamp: Date.now(),
       }));
     });
 
     // Listen for expense events
     socket.on("expenseEvent", (data) => {
       console.log("Socket.IO expenseEvent event received:", data);
+      // CRITICAL: Add timestamp to prevent duplicate event skipping bug
+      // Without timestamp, all events after the first would be skipped because
+      // undefined === undefined evaluates to true in ExpenseCenter.js
       dispatch(setLastEvent({
         eventType: "EXPENSE_EVENT",
-        payload: data
+        payload: data,
+        timestamp: Date.now(), // Unique timestamp for duplicate detection
       }));
     });
 
@@ -44,7 +49,8 @@ function SplitzySocket() {
       console.log("Socket.IO groupInvite event received:", data);
       dispatch(setLastEvent({
         eventType: "GROUP_INVITE",
-        payload: data
+        payload: data,
+        timestamp: Date.now(),
       }));
     });
 
@@ -53,7 +59,8 @@ function SplitzySocket() {
       console.log("Socket.IO chat:notification event received:", data);
       dispatch(setLastEvent({
         eventType: "CHAT_NOTIFICATION",
-        payload: data
+        payload: data,
+        timestamp: Date.now(),
       }));
     });
 

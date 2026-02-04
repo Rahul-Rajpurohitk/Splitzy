@@ -298,9 +298,22 @@ const expenseSlice = createSlice({
         // optional
       })
       .addCase(createExpenseThunk.fulfilled, (state, action) => {
-        // we can optionally push the new expense into state.list
-        // or refetch in the component
-        state.list.push(action.payload);
+        // Add new expense to BEGINNING of list (sorted by createdAt DESC)
+        // No need to refetch - this handles the creator device immediately
+        // Other devices will receive via socket event → updateSingleExpenseThunk
+
+        // CRITICAL: Check for duplicate to prevent race condition
+        // Socket event might arrive before this completes, adding the expense first
+        const alreadyExists = state.list.some(e => e.id === action.payload.id);
+        if (alreadyExists) {
+          console.log('[CreateExpense] Expense already exists (from socket event), skipping add:', action.payload.id);
+          // Update in place instead of adding duplicate
+          const idx = state.list.findIndex(e => e.id === action.payload.id);
+          if (idx >= 0) state.list[idx] = action.payload;
+        } else {
+          state.list.unshift(action.payload);
+          console.log('[CreateExpense] Expense added to beginning of list:', action.payload.id);
+        }
       })
       .addCase(createExpenseThunk.rejected, (state, action) => {
         state.error = action.payload || "Failed to create expense";

@@ -274,20 +274,22 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
     console.log("Final payload:", payload);
 
     try {
-      await dispatch(createExpenseThunk({ payload, token })).unwrap();
+      const createdExpense = await dispatch(createExpenseThunk({ payload, token })).unwrap();
       setShowModal(false);
 
       // Invalidate caches to ensure fresh data for balance cards and analytics
       invalidateCache('/analytics');
       invalidateCache('/home/expenses');
 
-      // Clear the lastFetchRef to force a fresh fetch
-      lastFetchRef.current = null;
+      // REMOVED: fetchExpensesThunk call was causing race condition with socket events
+      // The expense is already added to Redux by createExpenseThunk.fulfilled (optimistic update)
+      // Other devices of the same user will receive the update via socket event
+      // This prevents:
+      // 1. Race condition between fetch and socket event
+      // 2. Duplicate expense entries
+      // 3. Full list replacement disrupting UI state
 
-      // Await the refresh to ensure Redux state is fully updated
-      await dispatch(fetchExpensesThunk({ userId: myUserId, token })).unwrap();
-
-      console.log('[ExpenseCenter] Expense created and list refreshed');
+      console.log('[ExpenseCenter] Expense created:', createdExpense.id, '- list updated via Redux');
     } catch (err) {
       console.error("Error creating expense:", err);
     }
