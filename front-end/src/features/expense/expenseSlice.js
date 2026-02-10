@@ -284,8 +284,14 @@ const expenseSlice = createSlice({
       })
       .addCase(fetchSingleExpenseThunk.fulfilled, (state, action) => {
         state.status = "succeeded";
-        // Option A: replace the entire list with [one expense]
-        state.list = [action.payload];
+        // Update in place if expense exists, otherwise add to beginning
+        const expense = action.payload;
+        const index = state.list.findIndex(e => e.id === expense.id);
+        if (index >= 0) {
+          state.list[index] = expense;
+        } else {
+          state.list.unshift(expense);
+        }
       })
       .addCase(fetchSingleExpenseThunk.rejected, (state, action) => {
         state.status = "failed";
