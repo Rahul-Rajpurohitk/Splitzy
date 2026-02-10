@@ -148,7 +148,8 @@ public class ExpenseController {
             throw new IllegalArgumentException("participantUserId is required in settle request");
         }
         
-        assertOwnership(auth, request.getParticipantUserId());
+        // Verify the authenticated user is involved in this expense (as payer, participant, or creator)
+        assertInvolvedInExpense(auth, expenseId);
         logger.info("Settling expense: {} for user: {}", expenseId, request.getParticipantUserId());
         Expense expense = expenseService.settleExpense(expenseId, request);
         if (expense == null) {
@@ -193,5 +194,39 @@ public class ExpenseController {
             logger.warn("IDOR attempt: authenticated user {} tried to access data for user {}", authenticatedUserId, userId);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
+    }
+
+    /**
+     * Validates the authenticated user is involved in the expense (as payer, participant, or creator).
+     * Used for settle operations where either party can initiate settlement.
+     */
+    private void assertInvolvedInExpense(Authentication auth, String expenseId) {
+        String authenticatedUserId = getAuthenticatedUserId(auth);
+        Expense expense = expenseService.getExpenseById(expenseId);
+        if (expense == null) {
+            throw new ResourceNotFoundException("Expense", expenseId);
+        }
+        // Check if user is the creator
+        if (authenticatedUserId.equals(expense.getCreatorId())) {
+            return;
+        }
+        // Check if user is a payer
+        if (expense.getPayers() != null) {
+            for (var payer : expense.getPayers()) {
+                if (authenticatedUserId.equals(payer.getUserId())) {
+                    return;
+                }
+            }
+        }
+        // Check if user is a participant
+        if (expense.getParticipants() != null) {
+            for (var participant : expense.getParticipants()) {
+                if (authenticatedUserId.equals(participant.getUserId())) {
+                    return;
+                }
+            }
+        }
+        logger.warn("IDOR attempt: user {} tried to settle expense {} they're not involved in", authenticatedUserId, expenseId);
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
     }
 }
