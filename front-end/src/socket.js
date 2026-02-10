@@ -12,14 +12,12 @@ const getSocketUrl = () => {
 };
 
 const socketUrl = getSocketUrl();
-console.log('Socket.IO URL:', socketUrl);
 
 // Create single socket instance
 const socket = io(socketUrl, {
   path: '/socket.io/',
   withCredentials: true,
   auth: { token: localStorage.getItem('splitzyToken') },
-  query: { token: localStorage.getItem('splitzyToken') },
   // Start with polling, then upgrade to WebSocket for stability
   transports: ['polling', 'websocket'],
   upgrade: true,
@@ -68,38 +66,26 @@ export const reconnectSocket = () => {
     return socket;
   }
 
-  console.log('[Socket] Reconnecting with token present, length:', token.length);
-
   // Disconnect first if connected
   if (socket.connected) {
-    console.log('[Socket] Disconnecting existing connection...');
     socket.disconnect();
   }
 
   // Close the underlying engine to force a fresh connection
   if (socket.io && socket.io.engine) {
-    console.log('[Socket] Closing engine for fresh connection...');
     socket.io.engine.close();
   }
 
   // Update auth with new token (Socket.IO v4 style)
   socket.auth = { token };
 
-  // Update query params at all levels for netty-socketio compatibility
   if (socket.io) {
-    // Update Manager options
-    socket.io.opts.query = { token };
     // Re-enable auto-reconnection (might have been disabled on logout)
     socket.io.opts.reconnection = true;
-    // Also update _opts if it exists (internal backup)
-    if (socket.io._opts) {
-      socket.io._opts.query = { token };
-    }
   }
 
   // Reconnect - use a delay to ensure engine cleanup completes
   setTimeout(() => {
-    console.log('[Socket] Connecting with updated token...');
     socket.connect();
   }, 150);
 
@@ -108,8 +94,6 @@ export const reconnectSocket = () => {
 
 // Disconnect socket (call on logout)
 export const disconnectSocket = () => {
-  console.log('[Socket] Disconnecting and disabling auto-reconnect...');
-  // Disable auto-reconnect to prevent reconnecting without token
   if (socket.io) {
     socket.io.opts.reconnection = false;
   }
@@ -119,7 +103,6 @@ export const disconnectSocket = () => {
 // Initial connection if token exists
 const initialToken = localStorage.getItem('splitzyToken');
 if (initialToken) {
-  console.log('Initial token found, connecting socket...');
   socket.connect();
 }
 

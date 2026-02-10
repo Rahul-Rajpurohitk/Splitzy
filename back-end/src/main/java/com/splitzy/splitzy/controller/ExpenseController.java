@@ -5,11 +5,16 @@ import com.splitzy.splitzy.dto.SettleExpenseRequest;
 import com.splitzy.splitzy.exception.ResourceNotFoundException;
 import com.splitzy.splitzy.model.Expense;
 import com.splitzy.splitzy.service.ExpenseService;
+import com.splitzy.splitzy.service.dao.UserDao;
+import com.splitzy.splitzy.service.dao.UserDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
 import java.util.List;
@@ -24,8 +29,12 @@ public class ExpenseController {
     @Autowired
     private ExpenseService expenseService;
 
+    @Autowired
+    private UserDao userDao;
+
     @GetMapping("/user-expenses")
     public ResponseEntity<List<Expense>> getUserExpenses(
+            Authentication auth,
             @RequestParam String userId,
             @RequestParam(required = false, defaultValue = "ALL") String filter,
             @RequestParam(required = false) String owingFilter,
@@ -40,6 +49,7 @@ public class ExpenseController {
         if (userId == null || userId.trim().isEmpty()) {
             throw new IllegalArgumentException("userId is required");
         }
+        assertOwnership(auth, userId);
         logger.debug("Getting expenses for user: {}, filter: {}, owingFilter: {}, settledFilter: {}, friendId: {}, groupId: {}, typeFilter: {}, partialFilter: {}, categoryFilter: {}, dateRangeFilter: {}",
                 userId, filter, owingFilter, settledFilter, friendId, groupId, typeFilter, partialFilter, categoryFilter, dateRangeFilter);
         List<Expense> expenses = expenseService.getExpensesForUserFiltered(
@@ -49,6 +59,7 @@ public class ExpenseController {
 
     @GetMapping("/friend")
     public ResponseEntity<List<Expense>> getExpensesForFriend(
+            Authentication auth,
             @RequestParam String userId,
             @RequestParam String friendId
     ) {
@@ -58,6 +69,7 @@ public class ExpenseController {
         if (friendId == null || friendId.trim().isEmpty()) {
             throw new IllegalArgumentException("friendId is required");
         }
+        assertOwnership(auth, userId);
         logger.debug("Getting expenses for user: {} with friend: {}", userId, friendId);
         List<Expense> expenses = expenseService.getExpensesForUser(userId, friendId);
         return ResponseEntity.ok(expenses != null ? expenses : Collections.emptyList());
@@ -74,7 +86,7 @@ public class ExpenseController {
     }
 
     @PostMapping
-    public ResponseEntity<Expense> createExpense(@RequestBody CreateExpenseRequest request) {
+    public ResponseEntity<Expense> createExpense(Authentication auth, @RequestBody CreateExpenseRequest request) {
         // Validate request
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
@@ -92,6 +104,7 @@ public class ExpenseController {
             throw new IllegalArgumentException("totalAmount must be positive");
         }
         
+        assertOwnership(auth, request.getCreatorId());
         logger.info("Creating expense: {} by user: {}", request.getDescription(), request.getCreatorId());
         Expense expense = expenseService.createExpense(request);
         return ResponseEntity.status(201).body(expense);
@@ -122,6 +135,7 @@ public class ExpenseController {
 
     @PostMapping("/{expenseId}/settle")
     public ResponseEntity<Expense> settleExpense(
+            Authentication auth,
             @PathVariable String expenseId,
             @RequestBody SettleExpenseRequest request) {
         if (expenseId == null || expenseId.trim().isEmpty()) {
@@ -134,6 +148,7 @@ public class ExpenseController {
             throw new IllegalArgumentException("participantUserId is required in settle request");
         }
         
+        assertOwnership(auth, request.getParticipantUserId());
         logger.info("Settling expense: {} for user: {}", expenseId, request.getParticipantUserId());
         Expense expense = expenseService.settleExpense(expenseId, request);
         if (expense == null) {
@@ -153,5 +168,30 @@ public class ExpenseController {
             throw new ResourceNotFoundException("Expense", expenseId);
         }
         return ResponseEntity.ok(expense);
+    }
+
+    /**
+     * Resolves the authenticated user's ID from the JWT token.
+     */
+    private String getAuthenticatedUserId(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        String email = auth.getName();
+        UserDto user = userDao.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+        return user.getId();
+    }
+
+    /**
+     * Validates that the supplied userId matches the authenticated user.
+     * Prevents IDOR attacks where a user passes another user's ID.
+     */
+    private void assertOwnership(Authentication auth, String userId) {
+        String authenticatedUserId = getAuthenticatedUserId(auth);
+        if (!authenticatedUserId.equals(userId)) {
+            logger.warn("IDOR attempt: authenticated user {} tried to access data for user {}", authenticatedUserId, userId);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
     }
 }

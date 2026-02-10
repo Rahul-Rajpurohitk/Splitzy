@@ -15,17 +15,14 @@ const OAuth2RedirectHandler = () => {
             const error = params.get('error');
 
             if (token) {
-                // CRITICAL: Clear ALL storage and caches to prevent tenant-level data leakage
-                console.log('[OAuth2] Clearing ALL storage and caches before storing new user data');
+                // Clear ALL storage and caches to prevent tenant-level data leakage
                 localStorage.clear();
                 sessionStorage.clear();
                 
                 // Clear API memory cache to prevent stale user data
                 clearAllCache();
                 
-                // Store token
                 localStorage.setItem('splitzyToken', token);
-                console.log('[OAuth2] Token stored, about to call /auth/me');
 
                 try {
                     // Fetch user details with cache-busting
@@ -42,8 +39,6 @@ const OAuth2RedirectHandler = () => {
                     });
 
                     const data = response.data;
-                    console.log('[OAuth2] User data from /auth/me:', data);
-                    console.log('[OAuth2] Storing myUserId:', data.id);
                     localStorage.setItem('myUserId', data.id);
                     localStorage.setItem('myUserName', data.name);
                     localStorage.setItem('myUserEmail', data.email);

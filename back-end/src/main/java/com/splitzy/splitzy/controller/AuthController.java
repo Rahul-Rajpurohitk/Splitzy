@@ -9,9 +9,11 @@ import com.splitzy.splitzy.service.dao.UserDao;
 import com.splitzy.splitzy.service.dao.UserDto;
 import com.splitzy.splitzy.util.JwtUtil;
 import java.io.IOException;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -39,6 +41,9 @@ public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private static final Pattern STRONG_PASSWORD = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).{8,}$");
+    private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
+            "splitzy.xyz", "www.splitzy.xyz", "localhost"
+    );
 
     @Autowired
     private AuthenticationManager authenticationManager;
@@ -89,14 +94,14 @@ public class AuthController {
             return ResponseEntity.ok(response);
 
         } catch (UsernameNotFoundException e) {
-            logger.error("User not found for email: {}", user.getEmail());
-            response.put("error", "User not found. Please create an account.");
-            return ResponseEntity.ok(response);
+            logger.warn("Authentication failed for email: {}", user.getEmail());
+            response.put("error", "Invalid email or password.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
 
         } catch (BadCredentialsException e) {
-            logger.error("Invalid credentials for email: {}", user.getEmail());
+            logger.warn("Authentication failed for email: {}", user.getEmail());
             response.put("error", "Invalid email or password.");
-            return ResponseEntity.ok(response);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
 
         } catch (Exception e) {
             logger.error("Login failed for email: {}", user.getEmail(), e);
@@ -150,14 +155,16 @@ public class AuthController {
     @GetMapping("/verify-email")
     public void verify(@RequestParam String token, @RequestParam(required = false, defaultValue = "http://localhost:3000/login") String redirectTo,
                        HttpServletResponse response) throws IOException {
-        logger.info("Verification request received for token: {}", token);
+        logger.info("Verification request received");
+
+        // Validate redirect URL against allowlist to prevent open redirect attacks
+        String safeRedirect = getSafeRedirectUrl(redirectTo);
+
         try {
             RedisUser tempUser = null;
             String userKey = null;
-            for (String key : redisCacheService.getAllKeys()) { // Adjusted to RedisService
+            for (String key : redisCacheService.getAllKeys()) {
                 RedisUser redisUser = redisCacheService.getRedisUser(key);
-                // Log each RedisUser object fetched
-                logger.info("Fetched RedisUser object: {}", redisUser);
 
                 if (redisUser != null && redisUser.getVerificationToken().equals(token)) {
                     tempUser = redisUser;
@@ -168,32 +175,49 @@ public class AuthController {
 
             if (tempUser == null) {
                 logger.warn("Verification failed: invalid or expired token");
-                response.sendRedirect(redirectTo + "?message=InvalidOrExpiredToken");
+                response.sendRedirect(safeRedirect + "?message=InvalidOrExpiredToken");
                 return;
             }
-
-
 
             // Move the user to the permanent User collection
             User user = new User();
             user.setName(tempUser.getName());
             user.setEmail(tempUser.getEmail());
             user.setPassword(tempUser.getPassword());
-            user.setVerified(true); // Mark as verified
+            user.setVerified(true);
             userDetailsService.save(user);
 
             logger.info("User verified successfully: {}", user.getEmail());
 
-            //Delete the redisUser
-            if(userKey !=null){
+            if (userKey != null) {
                 redisCacheService.delete(userKey);
             }
 
-            response.sendRedirect(redirectTo + "?message=RegisteredSuccessfully");
+            response.sendRedirect(safeRedirect + "?message=RegisteredSuccessfully");
         } catch (Exception e) {
-            logger.error("Verification failed for token: {}", token, e);
-            response.sendRedirect(redirectTo + "?message=ServerError");
+            logger.error("Verification failed", e);
+            response.sendRedirect(safeRedirect + "?message=ServerError");
         }
+    }
+
+    /**
+     * Validates the redirect URL against an allowlist to prevent open redirect attacks.
+     * Falls back to the frontend login page if the URL is not allowed.
+     */
+    private String getSafeRedirectUrl(String redirectTo) {
+        if (redirectTo == null || redirectTo.isBlank()) {
+            return "https://splitzy.xyz/login";
+        }
+        try {
+            URI uri = new URI(redirectTo);
+            String host = uri.getHost();
+            if (host != null && ALLOWED_REDIRECT_HOSTS.contains(host.toLowerCase())) {
+                return redirectTo;
+            }
+        } catch (Exception e) {
+            logger.warn("Invalid redirect URL provided: {}", redirectTo);
+        }
+        return "https://splitzy.xyz/login";
     }
 
     @GetMapping("/me")
@@ -300,7 +324,7 @@ public class AuthController {
             
         } catch (Exception e) {
             logger.error("Test signup failed for email: {}", user.getEmail(), e);
-            response.put("error", "Failed to create user: " + e.getMessage());
+            response.put("error", "Failed to create user");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }

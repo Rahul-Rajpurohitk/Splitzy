@@ -39,7 +39,6 @@ public class CustomUserDetailsService implements UserDetailsService {
                 });
 
         logger.info("User loaded successfully for email: {}", username);
-        logger.info("Password from database for user {}: {}", username, userDto.getPassword());
         return new org.springframework.security.core.userdetails.User(
                 userDto.getEmail(),
                 userDto.getPassword(),

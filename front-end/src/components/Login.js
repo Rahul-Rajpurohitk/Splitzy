@@ -22,9 +22,6 @@ function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    console.log('API URL:', process.env.REACT_APP_API_URL);
-
-
     try {
       // Post credentials to backend
       const response = await axios.post(
@@ -34,14 +31,12 @@ function Login() {
 
       // The backend now returns a JSON object with { token, id, name, email } or { error: ... }
       const data = response.data;
-      console.log("Login response data:", data);
 
       if (data.error) {
         // If there's an error field, show it
         setError(data.error);
       } else if (data.token) {
-        // CRITICAL: Clear ALL storage and caches to prevent tenant-level data leakage
-        console.log('[Login] Clearing ALL storage and caches before storing new user data');
+        // Clear ALL storage and caches to prevent tenant-level data leakage
         localStorage.clear();
         sessionStorage.clear();
         clearAllCache();
