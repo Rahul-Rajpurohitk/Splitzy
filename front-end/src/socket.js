@@ -17,6 +17,8 @@ const socketUrl = getSocketUrl();
 const socket = io(socketUrl, {
   path: '/socket.io/',
   withCredentials: true,
+  // Send token via both query and auth - netty-socketio reads query param first
+  query: { token: localStorage.getItem('splitzyToken') },
   auth: { token: localStorage.getItem('splitzyToken') },
   // Start with polling, then upgrade to WebSocket for stability
   transports: ['polling', 'websocket'],
@@ -76,7 +78,8 @@ export const reconnectSocket = () => {
     socket.io.engine.close();
   }
 
-  // Update auth with new token (Socket.IO v4 style)
+  // Update token for both query and auth - netty-socketio reads query param first
+  socket.io.opts.query = { token };
   socket.auth = { token };
 
   if (socket.io) {
