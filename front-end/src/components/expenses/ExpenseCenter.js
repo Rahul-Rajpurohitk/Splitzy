@@ -216,18 +216,15 @@ function ExpenseCenter({ onOpenChat, externalShowAddModal, onCloseAddModal }) {
     const eventType = lastEvent.payload?.type;
     const expenseId = lastEvent.payload?.expenseId;
 
-    if ((eventType === "EXPENSE_CREATED" || eventType === "EXPENSE_SETTLED") && expenseId) {
-      console.log('[ExpenseCenter] Socket event:', eventType, '- granular update for expense:', expenseId);
+    if ((eventType === "EXPENSE_CREATED" || eventType === "EXPENSE_SETTLED" || eventType === "EXPENSE_FULLY_SETTLED") && expenseId) {
       // GRANULAR UPDATE: Only fetch and update the specific expense that changed
-      // This is MUCH more efficient than refetching the entire list
       dispatch(updateSingleExpenseThunk({
         expenseId,
         token,
         updateType: eventType,
       }));
-    } else if (eventType === "EXPENSE_CREATED" || eventType === "EXPENSE_SETTLED") {
+    } else if (eventType === "EXPENSE_CREATED" || eventType === "EXPENSE_SETTLED" || eventType === "EXPENSE_FULLY_SETTLED") {
       // Fallback: If no expenseId in payload, do background sync
-      console.log('[ExpenseCenter] Socket event without expenseId, falling back to background sync');
       dispatch(backgroundSyncExpensesThunk({ userId: myUserId, token, filters: unifiedFilters }));
     }
   }, [lastEvent, dispatch, myUserId, token, unifiedFilters]);

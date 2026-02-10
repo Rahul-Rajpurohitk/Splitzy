@@ -681,7 +681,7 @@ function AnalyticsDashboard() {
     // Handle expense events that should trigger analytics refresh - do it in background
     if (lastSocketEvent.eventType === 'EXPENSE_EVENT') {
       const eventType = lastSocketEvent.payload?.type;
-      if (['EXPENSE_CREATED', 'EXPENSE_UPDATED', 'EXPENSE_DELETED', 'EXPENSE_SETTLED'].includes(eventType)) {
+      if (['EXPENSE_CREATED', 'EXPENSE_UPDATED', 'EXPENSE_DELETED', 'EXPENSE_SETTLED', 'EXPENSE_FULLY_SETTLED'].includes(eventType)) {
         console.log('[Analytics] Expense event received:', eventType, '- background refreshing analytics');
         invalidateCache('/analytics');
         // Use background refresh to avoid disrupting user interaction
