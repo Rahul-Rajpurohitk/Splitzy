@@ -1,9 +1,5 @@
 :root {
-  /* Dark, modern gradient shared with auth */
-  --bg:
-    radial-gradient(circle at 20% 15%, rgba(56, 189, 248, 0.18), transparent 35%),
-    radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.14), transparent 32%),
-    linear-gradient(135deg, #0b1021 0%, #0f172a 40%, #0a0f1f 100%);
+  --bg: #0d1117;
   --card: rgba(255, 255, 255, 0.07);
   --card-strong: rgba(255, 255, 255, 0.1);
   --border: rgba(255, 255, 255, 0.14);
@@ -27,7 +23,7 @@ html {
 
 .app-shell {
   height: 100vh;
-  background: var(--bg);
+  background: var(--bg) !important;
   color: var(--text);
   font-family: "Inter", "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overflow: visible; /* Allow dropdowns to show */
